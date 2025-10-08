@@ -1,0 +1,15 @@
+name: experiments
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - tensorflow
+  - torchaudio
+  - pytorch
+  - pytorch-cuda=12.1
+  - librosa
+  - audioflux
+  - ipykernel
+  - pandas
+  - matplotlib
+  - ipympl
