@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import torchaudio
@@ -46,4 +47,49 @@ class AudioDatasetVAD(Dataset):
         if self.target_transform:
             vad = self.target_transform(vad)
         return audio, vad
+    
+class Plot:
+    @staticmethod
+    def waveform(waveform, sample_rate, title="Waveform", xlim=None, ylim=None, size=(12, 4)):        
+        waveform = waveform.numpy()
+        num_channels, num_frames = waveform.shape
+        time_axis = torch.arange(0, num_frames) / sample_rate
+
+        plt.figure(figsize=size)
+        plt.plot(time_axis, waveform[0])
+        plt.title(title)
+        plt.xlabel('Time (s)')
+        plt.ylabel('Amplitude')
+        if xlim:
+            plt.xlim(xlim)
+        if ylim:
+            plt.ylim(ylim)
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+class Transforms:
+    @staticmethod
+    def mono(waveform):
+        if waveform.size(0) > 1:
+            return torch.mean(waveform, dim=0, keepdim=True)
+        return waveform
+
+    @staticmethod
+    def resample(waveform, orig_freq, new_freq):
+        resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
+        return resampler(waveform)
+
+    @staticmethod
+    def pad_trim(waveform, max_len):
+        if waveform.size(1) > max_len:
+            return waveform[:, :max_len]
+        else:
+            padding = max_len - waveform.size(1)
+            return torch.nn.functional.pad(waveform, (0, padding))
+
+    #@staticmethod
+    #def spectrogram(waveform, n_fft=400, win_length=None, hop_length=200):
+    #    spectrogram_transform = torchaudio.transforms.Spectrogram(n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+    #    return spectrogram_transform(waveform)
     
