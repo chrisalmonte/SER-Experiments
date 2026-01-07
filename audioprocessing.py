@@ -92,4 +92,18 @@ class Transforms:
     #def spectrogram(waveform, n_fft=400, win_length=None, hop_length=200):
     #    spectrogram_transform = torchaudio.transforms.Spectrogram(n_fft=n_fft, win_length=win_length, hop_length=hop_length)
     #    return spectrogram_transform(waveform)
+
+class Batching:
+    @staticmethod
+    def dynamic_length_collate(batch):
+        max_len = max(item[0].size(1) for item in batch)
+        batch_inputs = []
+        batch_targets = [item[1] for item in batch]
+        for item in batch:
+            batch_inputs.append(Transforms.pad_trim(item[0], max_len))
+        batch_inputs = torch.stack(batch_inputs)
+        batch_targets = torch.stack(batch_targets)
+        return batch_inputs, batch_targets
+
+        
     
