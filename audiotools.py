@@ -129,5 +129,29 @@ class Batching:
         batch_targets = torch.stack(batch_targets)
         return batch_inputs, batch_targets
 
+class TSFMnormalizeM1(object):
+    """
+    Normalizes tensor to values between -1 and 1.
+    """
+    def __init__(self, min_value, max_value):
+        self.min_value = min_value
+        self.max_value = max_value
+
+    def __call__(self, tensor):        
+        normalized = 2 * ((tensor - self.min_value) / (self.max_value - self.min_value)) - 1
+        return normalized
+    
+class TSFMnormalize(object):
+    """
+    Normalizes tensor to values between 0 and 1.
+    """
+    def __init__(self, min_value, max_value):
+        self.min_value = min_value
+        self.max_value = max_value
+
+    def __call__(self, tensor):        
+        normalized = (tensor - self.min_value) / (self.max_value - self.min_value)
+        return normalized
+        
         
     
