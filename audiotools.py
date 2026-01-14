@@ -73,7 +73,8 @@ class Plot:
         spectrogram = spectrogram.squeeze().numpy()
         
         # Convert to dB scale
-        spectrogram_db = 10 * torch.log10(torch.tensor(spectrogram) + 1e-10).numpy()
+        #spectrogram_db = 10 * torch.log10(torch.tensor(spectrogram) + 1e-10).numpy()
+        spectrogram_db = spectrogram
 
         plt.figure(figsize=size)
         plt.imshow(spectrogram_db, origin='lower', aspect='auto', cmap='magma')
@@ -82,26 +83,6 @@ class Plot:
         plt.xlabel(xlabel)
         plt.colorbar(format='%+2.0f dB')
         plt.show()
-
-class Transforms:
-    @staticmethod
-    def mono(waveform):
-        if waveform.size(0) > 1:
-            return torch.mean(waveform, dim=0, keepdim=True)
-        return waveform
-
-    @staticmethod
-    def resample(waveform, orig_freq, new_freq):
-        resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
-        return resampler(waveform)
-
-    @staticmethod
-    def pad_trim(waveform, max_len):
-        if waveform.size(1) > max_len:
-            return waveform[:, :max_len]
-        else:
-            padding = max_len - waveform.size(1)
-            return torch.nn.functional.pad(waveform, (0, padding))
 
 class Batching:
     @staticmethod
@@ -128,6 +109,26 @@ class Batching:
         batch_inputs = torch.stack(batch_inputs)
         batch_targets = torch.stack(batch_targets)
         return batch_inputs, batch_targets
+
+class Transforms:
+    @staticmethod
+    def mono(waveform):
+        if waveform.size(0) > 1:
+            return torch.mean(waveform, dim=0, keepdim=True)
+        return waveform
+
+    @staticmethod
+    def resample(waveform, orig_freq, new_freq):
+        resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
+        return resampler(waveform)
+
+    @staticmethod
+    def pad_trim(waveform, max_len):
+        if waveform.size(1) > max_len:
+            return waveform[:, :max_len]
+        else:
+            padding = max_len - waveform.size(1)
+            return torch.nn.functional.pad(waveform, (0, padding))
 
 class TSFMnormalizeM1(object):
     """
