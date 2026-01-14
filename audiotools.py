@@ -68,6 +68,21 @@ class Plot:
         plt.grid(True)
         plt.show()
 
+    @staticmethod
+    def spectrogram(spectrogram, title="Spectrogram", ylabel="Frequency bin", xlabel="Frame", size=(12, 4)):
+        spectrogram = spectrogram.squeeze().numpy()
+        
+        # Convert to dB scale
+        spectrogram_db = 10 * torch.log10(torch.tensor(spectrogram) + 1e-10).numpy()
+
+        plt.figure(figsize=size)
+        plt.imshow(spectrogram_db, origin='lower', aspect='auto', cmap='magma')
+        plt.title(title)
+        plt.ylabel(ylabel)
+        plt.xlabel(xlabel)
+        plt.colorbar(format='%+2.0f dB')
+        plt.show()
+
 class Transforms:
     @staticmethod
     def mono(waveform):
@@ -88,19 +103,28 @@ class Transforms:
             padding = max_len - waveform.size(1)
             return torch.nn.functional.pad(waveform, (0, padding))
 
-    #@staticmethod
-    #def spectrogram(waveform, n_fft=400, win_length=None, hop_length=200):
-    #    spectrogram_transform = torchaudio.transforms.Spectrogram(n_fft=n_fft, win_length=win_length, hop_length=hop_length)
-    #    return spectrogram_transform(waveform)
-
 class Batching:
     @staticmethod
-    def dynamic_length_collate(batch):
+    def waveform_dynamic(batch):
         max_len = max(item[0].size(1) for item in batch)
         batch_inputs = []
         batch_targets = [item[1] for item in batch]
         for item in batch:
             batch_inputs.append(Transforms.pad_trim(item[0], max_len))
+        batch_inputs = torch.stack(batch_inputs)
+        batch_targets = torch.stack(batch_targets)
+        return batch_inputs, batch_targets
+    
+    @staticmethod
+    def spectrogram_dynamic(batch):
+        max_freq_bins = max(item[0].size(1) for item in batch)
+        max_time_frames = max(item[0].size(2) for item in batch)
+        batch_inputs = []
+        batch_targets = [item[1] for item in batch]
+        for item in batch:
+            raw_spectogram = item[0]
+            padded_spec = torch.nn.functional.pad(raw_spectogram, (0, max_time_frames - raw_spectogram.size(2), 0, max_freq_bins - raw_spectogram.size(1)))
+            batch_inputs.append(padded_spec)
         batch_inputs = torch.stack(batch_inputs)
         batch_targets = torch.stack(batch_targets)
         return batch_inputs, batch_targets
