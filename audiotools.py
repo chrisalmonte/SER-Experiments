@@ -69,20 +69,32 @@ class Plot:
         plt.show()
 
     @staticmethod
-    def spectrogram(spectrogram, title="Spectrogram", ylabel="Frequency bin", xlabel="Frame", size=(12, 4)):
+    def spectrogram(spectrogram, title="Spectrogram", ylabel="Frequency bin", xlabel="Frame",
+                     size=(12, 4), cmap='magma'):
         spectrogram = spectrogram.squeeze().numpy()
         
         # Convert to dB scale
         #spectrogram_db = 10 * torch.log10(torch.tensor(spectrogram) + 1e-10).numpy()
-        spectrogram_db = spectrogram
 
         plt.figure(figsize=size)
-        plt.imshow(spectrogram_db, origin='lower', aspect='auto', cmap='magma')
+        plt.imshow(spectrogram, origin='lower', aspect='auto', cmap=cmap)
         plt.title(title)
         plt.ylabel(ylabel)
         plt.xlabel(xlabel)
         plt.colorbar(format='%+2.0f dB')
         plt.show()
+    
+    @staticmethod
+    def mfcc(mfcc, title="MFCC", ylabel="MFCC Coefficient", xlabel="Frame", size=(12, 4)):
+        mfcc = mfcc.squeeze().numpy()
+        plt.figure(figsize=size)
+        plt.imshow(mfcc, origin='lower', aspect='auto', interpolation='nearest')
+        plt.title(title)
+        plt.ylabel(ylabel)
+        plt.xlabel(xlabel)
+        plt.colorbar()
+        plt.show()
+
 
 class Batching:
     @staticmethod
