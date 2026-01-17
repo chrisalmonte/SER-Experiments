@@ -72,10 +72,6 @@ class Plot:
     def spectrogram(spectrogram, title="Spectrogram", ylabel="Frequency bin", xlabel="Frame",
                      size=(12, 4), cmap='magma'):
         spectrogram = spectrogram.squeeze().numpy()
-        
-        # Convert to dB scale
-        #spectrogram_db = 10 * torch.log10(torch.tensor(spectrogram) + 1e-10).numpy()
-
         plt.figure(figsize=size)
         plt.imshow(spectrogram, origin='lower', aspect='auto', cmap=cmap)
         plt.title(title)
@@ -96,14 +92,15 @@ class Plot:
         plt.show()
 
 
-class Batching:
+class Batching:    
     @staticmethod
     def waveform_dynamic(batch):
         max_len = max(item[0].size(1) for item in batch)
         batch_inputs = []
         batch_targets = [item[1] for item in batch]
         for item in batch:
-            batch_inputs.append(Transforms.pad_trim(item[0], max_len))
+            padded_input = torch.nn.functional.pad(item[0], (0, max_len - item[0].size(1)))
+            batch_inputs.append(padded_input)
         batch_inputs = torch.stack(batch_inputs)
         batch_targets = torch.stack(batch_targets)
         return batch_inputs, batch_targets
@@ -120,51 +117,6 @@ class Batching:
             batch_inputs.append(padded_spec)
         batch_inputs = torch.stack(batch_inputs)
         batch_targets = torch.stack(batch_targets)
-        return batch_inputs, batch_targets
-
-class Transforms:
-    @staticmethod
-    def mono(waveform):
-        if waveform.size(0) > 1:
-            return torch.mean(waveform, dim=0, keepdim=True)
-        return waveform
-
-    @staticmethod
-    def resample(waveform, orig_freq, new_freq):
-        resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
-        return resampler(waveform)
-
-    @staticmethod
-    def pad_trim(waveform, max_len):
-        if waveform.size(1) > max_len:
-            return waveform[:, :max_len]
-        else:
-            padding = max_len - waveform.size(1)
-            return torch.nn.functional.pad(waveform, (0, padding))
-
-class TSFMnormalizeM1(object):
-    """
-    Normalizes tensor to values between -1 and 1.
-    """
-    def __init__(self, min_value, max_value):
-        self.min_value = min_value
-        self.max_value = max_value
-
-    def __call__(self, tensor):        
-        normalized = 2 * ((tensor - self.min_value) / (self.max_value - self.min_value)) - 1
-        return normalized
-    
-class TSFMnormalize(object):
-    """
-    Normalizes tensor to values between 0 and 1.
-    """
-    def __init__(self, min_value, max_value):
-        self.min_value = min_value
-        self.max_value = max_value
-
-    def __call__(self, tensor):        
-        normalized = (tensor - self.min_value) / (self.max_value - self.min_value)
-        return normalized
-        
+        return batch_inputs, batch_targets       
         
     
