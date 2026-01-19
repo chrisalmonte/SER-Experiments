@@ -35,7 +35,7 @@ class Log:
         self.epoch.append('\nEpoch num. ' + str(epoch))
         for key, value in properties.items():
             self.epoch.append(f"{key}: {value}")
-        self.epoch.append('\n\n')
+        self.epoch.append('\n')
 
     def save(self):
         file_path = f"{self.path}/{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.txt"       
