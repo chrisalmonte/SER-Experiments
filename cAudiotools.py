@@ -47,6 +47,33 @@ class AudioDatasetVAD(Dataset):
         if self.target_transform:
             vad = self.target_transform(vad)
         return audio, vad
+
+class Batching:    
+    @staticmethod
+    def waveform_dynamic(batch):
+        max_len = max(item[0].size(1) for item in batch)
+        batch_inputs = []
+        batch_targets = [item[1] for item in batch]
+        for item in batch:
+            padded_input = torch.nn.functional.pad(item[0], (0, max_len - item[0].size(1)))
+            batch_inputs.append(padded_input)
+        batch_inputs = torch.stack(batch_inputs)
+        batch_targets = torch.stack(batch_targets)
+        return batch_inputs, batch_targets
+    
+    @staticmethod
+    def spectrogram_dynamic(batch):
+        max_freq_bins = max(item[0].size(1) for item in batch)
+        max_time_frames = max(item[0].size(2) for item in batch)
+        batch_inputs = []
+        batch_targets = [item[1] for item in batch]
+        for item in batch:
+            raw_spectogram = item[0]
+            padded_spec = torch.nn.functional.pad(raw_spectogram, (0, max_time_frames - raw_spectogram.size(2), 0, max_freq_bins - raw_spectogram.size(1)))
+            batch_inputs.append(padded_spec)
+        batch_inputs = torch.stack(batch_inputs)
+        batch_targets = torch.stack(batch_targets)
+        return batch_inputs, batch_targets   
     
 class Plot:
     @staticmethod
@@ -90,33 +117,4 @@ class Plot:
         plt.xlabel(xlabel)
         plt.colorbar()
         plt.show()
-
-
-class Batching:    
-    @staticmethod
-    def waveform_dynamic(batch):
-        max_len = max(item[0].size(1) for item in batch)
-        batch_inputs = []
-        batch_targets = [item[1] for item in batch]
-        for item in batch:
-            padded_input = torch.nn.functional.pad(item[0], (0, max_len - item[0].size(1)))
-            batch_inputs.append(padded_input)
-        batch_inputs = torch.stack(batch_inputs)
-        batch_targets = torch.stack(batch_targets)
-        return batch_inputs, batch_targets
-    
-    @staticmethod
-    def spectrogram_dynamic(batch):
-        max_freq_bins = max(item[0].size(1) for item in batch)
-        max_time_frames = max(item[0].size(2) for item in batch)
-        batch_inputs = []
-        batch_targets = [item[1] for item in batch]
-        for item in batch:
-            raw_spectogram = item[0]
-            padded_spec = torch.nn.functional.pad(raw_spectogram, (0, max_time_frames - raw_spectogram.size(2), 0, max_freq_bins - raw_spectogram.size(1)))
-            batch_inputs.append(padded_spec)
-        batch_inputs = torch.stack(batch_inputs)
-        batch_targets = torch.stack(batch_targets)
-        return batch_inputs, batch_targets       
-        
     
