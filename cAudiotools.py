@@ -111,7 +111,7 @@ class Plot:
     def mfcc(mfcc, title="MFCC", ylabel="MFCC Coefficient", xlabel="Frame", size=(12, 4)):
         mfcc = mfcc.squeeze().numpy()
         plt.figure(figsize=size)
-        plt.imshow(mfcc, origin='lower', aspect='auto', interpolation='nearest')
+        plt.imshow(mfcc, origin='lower', aspect='auto', interpolation='nearest', cmap='cividis')
         plt.title(title)
         plt.ylabel(ylabel)
         plt.xlabel(xlabel)

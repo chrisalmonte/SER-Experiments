@@ -16,17 +16,19 @@ class Log:
         self.properties = []
         self.epoch = []
     
-    def log_message(self, message: str):
+    def log_message(self, message: str, show: bool=False):
         self.messages.append(f"{datetime.now().strftime('%Y_%m_%d-%H:%M:%S')}: {message}")
-        return message
+        if show:
+            print(message)
     
-    def log_property(self, key: str, value):
+    def log_property(self, key: str, value, show: bool=False):
         property = f"{key}: {self.str_property(value)}"
         self.properties.append(property)
-        return property
+        if show:
+            print(property)
 
     def log_properties(self, set_name:str ,properties: dict):
-        self.properties.append("\n" + set_name + ":\n")
+        self.properties.append("\n\n" + set_name + ":\n")
         for key, value in properties.items():
             self.properties.append(f"{key}: {self.str_property(value)}")
         self.properties.append('\n')
