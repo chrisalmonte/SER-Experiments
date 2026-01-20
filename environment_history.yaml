@@ -14,3 +14,4 @@ dependencies:
   - ipykernel
   - ipympl
   - transformers
+  - ffmpeg=6
