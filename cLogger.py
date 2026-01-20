@@ -15,6 +15,7 @@ class Log:
         self.messages = []
         self.properties = []
         self.epoch = []
+        self.last_save = None
     
     def log_message(self, message: str, show: bool=False):
         self.messages.append(f"{datetime.now().strftime('%Y_%m_%d-%H:%M:%S')}: {message}")
@@ -28,19 +29,25 @@ class Log:
             print(property)
 
     def log_properties(self, set_name:str ,properties: dict):
-        self.properties.append("\n\n" + set_name + ":\n")
+        self.properties.append(' ')
+        self.properties.append(set_name + ":\n")
         for key, value in properties.items():
             self.properties.append(f"{key}: {self.str_property(value)}")
-        self.properties.append('\n')
+        self.properties.append(' ')
 
     def log_epoch(self, epoch, properties: dict):
-        self.epoch.append('\nEpoch num. ' + str(epoch))
+        self.properties.append(' ')
+        self.epoch.append(f'Epoch num. {epoch}:' + '\n')
         for key, value in properties.items():
             self.epoch.append(f"{key}: {value}")
-        self.epoch.append('\n')
+        self.properties.append(' ')
 
-    def save(self):
-        file_path = f"{self.path}/{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.txt"       
+    def save(self, overwrite: bool=False):
+        if overwrite and self.last_save:
+            file_path = self.last_save
+        else:
+            file_path = f"{self.path}/{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.txt"       
+            self.last_save = file_path
         with open(file_path, 'w', encoding="utf-8") as file:
             file.write("Log saved on: ")
             file.write(datetime.now().strftime("%b %d %Y - %H:%M:%S") + "\n\n")
