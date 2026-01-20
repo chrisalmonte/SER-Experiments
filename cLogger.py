@@ -68,5 +68,4 @@ class Log:
         if callable(property):
             return property.__class__.__name__
         return str(property)
-
     
