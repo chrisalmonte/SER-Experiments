@@ -86,7 +86,7 @@ class Log:
             raise ValueError("Time tracking has not been started. Call track_time() first.")
         else:
             elapsed_time = datetime.now() - self.tracked_time_start
-            self.timings.append(f"{message if message else "Elapsed time"}: {str(elapsed_time)}")
+            self.timings.append(f"{message if message else 'Elapsed time'}: {str(elapsed_time)}")
             if reset_timer:
                 self.tracked_time_start = datetime.now()
     
