@@ -38,12 +38,18 @@ class Log:
             self.properties.append(f"{key}: {self.str_property(value)}")
         self.properties.append(' ')
 
-    def log_epoch(self, epoch, properties: dict):
-        self.properties.append(' ')
-        self.epoch.append(f'Epoch num. {epoch}:' + '\n')
+    def log_epoch(self, epoch, properties: dict, show=False):
+        self.epoch.append(' ')
+        epoch_log = f'Epoch num. {epoch}:' + '\n'
+        if show:
+            print(epoch_log)
+        self.epoch.append(epoch_log)
         for key, value in properties.items():
-            self.epoch.append(f"{key}: {value}")
-        self.properties.append(' ')
+            log = f"{key}: {value}"
+            self.epoch.append(log)
+            if show:
+                print(log)
+        self.epoch.append(' ')
 
     def save(self, overwrite: bool=True):
         if overwrite and self.last_save:
@@ -72,21 +78,24 @@ class Log:
                 file.write("-----Timings-----\n\n")
                 file.write("\n".join(self.timings) + "\n\n")
         
-    def track_time(self, track: bool, message: str=""):
+    def track_time(self, track: bool, message: str="", show: bool=False):
         if not track:
             self.tracked_time_start = None
         else:
             if self.tracked_time_start:
-                self.log_message("Time tracking reset.", show=True)
+                self.log_message("Time tracking reset.", show=show)
             self.tracked_time_start = datetime.now()
             self.log_message(message if message else "Time tracking started.", show=True)            
     
-    def log_elapsed_time(self, message: str="", reset_timer: bool=False):        
+    def log_elapsed_time(self, message: str="", reset_timer: bool=False, show: bool=False):        
         if not self.tracked_time_start:
             raise ValueError("Time tracking has not been started. Call track_time() first.")
         else:
             elapsed_time = datetime.now() - self.tracked_time_start
-            self.timings.append(f"{message if message else 'Elapsed time'}: {str(elapsed_time)}")
+            log = f"{message if message else 'Elapsed time'}: {str(elapsed_time)}"
+            self.timings.append(log)
+            if show:
+                print(log)
             if reset_timer:
                 self.tracked_time_start = datetime.now()
     
