@@ -16,6 +16,7 @@ class Log:
         self.messages = []
         self.properties = []
         self.epoch = []
+        self.epoch_values = {}
         self.timings = []
         self.tracked_time_start = None
         self.last_save = None
@@ -45,6 +46,10 @@ class Log:
             print(epoch_log)
         self.epoch.append(epoch_log)
         for key, value in properties.items():
+            if key in self.epoch_values:
+                self.epoch_values[key].append(value)  
+            else:
+                self.epoch_values[key] = [value]
             log = f"{key}: {value}"
             self.epoch.append(log)
             if show:
@@ -81,11 +86,12 @@ class Log:
     def track_time(self, track: bool, message: str="", show: bool=False):
         if not track:
             self.tracked_time_start = None
+            self.log_message(message if message else "Time tracking stopped.", show=show)
         else:
             if self.tracked_time_start:
-                self.log_message("Time tracking reset.", show=show)
+                self.log_message("Time tracking reset.", show=True)
             self.tracked_time_start = datetime.now()
-            self.log_message(message if message else "Time tracking started.", show=True)            
+            self.log_message(message if message else "Time tracking started.", show=show)            
     
     def log_elapsed_time(self, message: str="", reset_timer: bool=False, show: bool=False):        
         if not self.tracked_time_start:
