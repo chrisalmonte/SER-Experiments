@@ -1,0 +1,17 @@
+name: ser_training
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - torchvision==0.20.1
+  - pytorch-cuda=12.4
+  - torchaudio==2.5.1
+  - pytorch==2.5.1
+  - librosa
+  - audioflux
+  - pandas
+  - matplotlib
+  - ipykernel
+  - ipympl
+  - transformers
+  - ffmpeg=6
