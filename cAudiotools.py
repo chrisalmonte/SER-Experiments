@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
-import torchaudio
 import torch
+import torch.nn.functional as F
+import torchaudio
 from torch.utils.data import Dataset
 
 class AudioDatasetCategory(Dataset):
@@ -48,14 +49,14 @@ class AudioDatasetVAD(Dataset):
             vad = self.target_transform(vad)
         return audio, vad
 
-class Batching:    
+class Collate:    
     @staticmethod
     def waveform_dynamic(batch):
         max_len = max(item[0].size(1) for item in batch)
         batch_inputs = []
         batch_targets = [item[1] for item in batch]
         for item in batch:
-            padded_input = torch.nn.functional.pad(item[0], (0, max_len - item[0].size(1)))
+            padded_input = F.pad(item[0], (0, max_len - item[0].size(1)))
             batch_inputs.append(padded_input)
         batch_inputs = torch.stack(batch_inputs)
         batch_targets = torch.stack(batch_targets)
@@ -69,11 +70,26 @@ class Batching:
         batch_targets = [item[1] for item in batch]
         for item in batch:
             raw_spectogram = item[0]
-            padded_spec = torch.nn.functional.pad(raw_spectogram, (0, max_time_frames - raw_spectogram.size(2), 0, max_freq_bins - raw_spectogram.size(1)))
+            padded_spec = F.pad(raw_spectogram, (0, max_time_frames - raw_spectogram.size(2), 0, max_freq_bins - raw_spectogram.size(1)))
             batch_inputs.append(padded_spec)
         batch_inputs = torch.stack(batch_inputs)
         batch_targets = torch.stack(batch_targets)
-        return batch_inputs, batch_targets   
+        return batch_inputs, batch_targets
+    
+    @staticmethod
+    def waveform_with_lengths(batch):
+        audio_waveforms, batch_targets = zip(*batch)
+        batch_inputs = []
+        waveform_lengths = torch.tensor(
+            [waveform.shape[-1] for waveform in audio_waveforms],
+            dtype=torch.long
+        )
+        max_len = max(waveform_lengths).max().item()
+        for waveform in audio_waveforms:
+            batch_inputs.append(F.pad(waveform, (0, max_len - waveform.shape[-1])))
+        batch_inputs = torch.stack(batch_inputs, dim=0)
+        batch_targets = torch.stack(batch_targets, dim=0)
+        return batch_inputs, waveform_lengths, batch_targets  
     
 class Plot:
     @staticmethod
