@@ -71,7 +71,7 @@ class ModelManager:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"No checkpoint found at {path}")
                
-        checkpoint = torch.load(path, weights_only=True)
+        checkpoint = torch.load(path, weights_only=False)
         epoch = checkpoint['epoch']
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
