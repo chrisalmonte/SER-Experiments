@@ -92,17 +92,17 @@ class ModelManager:
 
 class Directories:
     @staticmethod
-    def make_unique(path: str):
-        path = os.path.join(path, f"run_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}")
-        if os.path.exists(path):
-            path = path + "_copy"
-            print("The directory already exists. A new directory has been created:", path)
+    def make_unique(directory: str):
+        directory = os.path.join(directory, f"run_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}")
+        if os.path.exists(directory):
+            directory = directory + "_copy"
+            print("The directory already exists. A new directory has been created:", directory)
         try:
-            os.makedirs(path, exist_ok=True)
-            os.mkdir(os.path.join(path, "checkpoints"))
-            print("Directory created at:", path)
+            os.makedirs(directory, exist_ok=True)
+            os.mkdir(os.path.join(directory, "checkpoints"))
+            print("Directory created at:", directory)
         except Exception as e:
             raise OSError(f"The directory could not be created: {e}")
-        return path
+        return directory
             
         
