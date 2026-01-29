@@ -58,13 +58,15 @@ class Log:
         if overwrite and self.last_save:
             file_path = self.last_save
         else:
-            file_path = f"{self.path}/{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.pkl"       
+            file_path = os.path.join(self.path, f"{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.pkl")
             self.last_save = file_path
+        print(f"Saving log to {file_path}...")
         with open(file_path, 'wb') as file:
             pickle.dump(self, file)
+        print("Log saved.")
 
     def save_txt(self):
-        file_path = f"{self.path}/{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.txt"
+        file_path = os.path.join(self.path, f"{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.txt")
         with open(file_path, 'w', encoding="utf-8") as file:
             file.write("Log saved on: ")
             file.write(datetime.now().strftime("%b %d %Y - %H:%M:%S") + "\n\n")
