@@ -77,7 +77,7 @@ class Collate:
         return batch_inputs, batch_targets
     
     @staticmethod
-    def waveform_with_lengths(batch):
+    def waveform_dynamic_wLengths(batch):
         audio_waveforms, batch_targets = zip(*batch)
         batch_inputs = []
         waveform_lengths = torch.tensor(
@@ -89,7 +89,33 @@ class Collate:
             batch_inputs.append(F.pad(waveform, (0, max_len - waveform.shape[-1])))
         batch_inputs = torch.stack(batch_inputs, dim=0)
         batch_targets = torch.stack(batch_targets, dim=0)
-        return batch_inputs, waveform_lengths, batch_targets  
+        return batch_inputs, waveform_lengths, batch_targets
+
+    @staticmethod
+    def waveform_dynamic_wMasks(batch):
+        audio_waveforms, batch_targets = zip(*batch)
+
+        # pad_sequence expects a list of 1D tensors (Time,), not (1, Time)
+        processed_waveforms = []
+        lengths = []
+        for wav in audio_waveforms:
+            squeezed_wav = wav.squeeze()
+            processed_waveforms.append(squeezed_wav)
+            lengths.append(squeezed_wav.size(0))
+
+        batch_inputs = torch.nn.utils.rnn.pad_sequence(processed_waveforms, batch_first=True, padding_value=0.0)
+
+        #Create Masks (Vectorized)
+        max_len = batch_inputs.shape[1]
+
+        lengths_tensor = torch.tensor(lengths).unsqueeze(1) # Shape: (Batch, 1)
+        range_tensor = torch.arange(max_len).unsqueeze(0)   # Shape: (1, Max_Len)
+        batch_masks = (range_tensor < lengths_tensor).long()
+
+        #Stack Targets
+        batch_targets = torch.stack(batch_targets, dim=0)
+
+        return batch_inputs, batch_masks, batch_targets
     
 class Plot:
     @staticmethod
