@@ -14,7 +14,7 @@ class Log:
         self.prefix = prefix
         self.path = path
         self.messages = []
-        self.properties = []
+        self.properties = {}
         self.epoch_values = {}
         self.timings = []
         self.tracked_time_start = None
@@ -26,19 +26,15 @@ class Log:
             print(message)
     
     def log_property(self, key: str, value, show: bool=True):
-        property = f"{key}: {self.str_property(value)}"
-        self.properties.append(property)
+        self.properties[key] = self.str_property(value)
         if show:
-            print(property)
+            print(f"{key}: {self.str_property(value)}")
 
     def log_properties(self, set_name:str ,properties: dict, show: bool=True):
-        self.properties.append(' ')
-        self.properties.append(set_name + ":\n")
-        for key, value in properties.items():
-            self.properties.append(f"{key}: {self.str_property(value)}")
-            if show:
-                print(f"{key}: {self.str_property(value)}")
-        self.properties.append(' ')
+        properties_str = '\n'.join([f"{key}: {self.str_property(value)}" for key, value in properties.items()])
+        self.properties[set_name] = properties_str
+        if show:
+            print(f"{set_name}:\n{properties_str}")
 
     def log_epoch(self, epoch: int, properties: dict, show=True):
         if show:
@@ -72,7 +68,8 @@ class Log:
             file.write(datetime.now().strftime("%b %d %Y - %H:%M:%S") + "\n\n")
             if self.properties:
                 file.write("-----Properties-----\n\n")
-                file.write("\n".join(self.properties) + "\n\n")
+                for key, value in self.properties.items():
+                    file.write(f"{key}: {value}\n\n")
             if self.messages:
                 file.write("-----History-----\n\n")
                 file.write("\n".join(self.messages) + "\n\n")
