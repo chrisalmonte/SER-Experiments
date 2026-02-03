@@ -14,7 +14,7 @@ class Log:
         self.prefix = prefix
         self.path = path
         self.messages = []
-        self.properties = []
+        self.properties = {}
         self.epoch_values = {}
         self.timings = []
         self.tracked_time_start = None
@@ -26,19 +26,15 @@ class Log:
             print(message)
     
     def log_property(self, key: str, value, show: bool=True):
-        property = f"{key}: {self.str_property(value)}"
-        self.properties.append(property)
+        self.properties[key] = self.str_property(value)
         if show:
-            print(property)
+            print(f"{key}: {self.str_property(value)}")
 
     def log_properties(self, set_name:str ,properties: dict, show: bool=True):
-        self.properties.append(' ')
-        self.properties.append(set_name + ":\n")
-        for key, value in properties.items():
-            self.properties.append(f"{key}: {self.str_property(value)}")
-            if show:
-                print(f"{key}: {self.str_property(value)}")
-        self.properties.append(' ')
+        properties_str = '\n'.join([f"{key}: {self.str_property(value)}" for key, value in properties.items()])
+        self.properties[set_name] = properties_str
+        if show:
+            print(f"{set_name}:\n{properties_str}")
 
     def log_epoch(self, epoch: int, properties: dict, show=True):
         if show:
@@ -58,19 +54,22 @@ class Log:
         if overwrite and self.last_save:
             file_path = self.last_save
         else:
-            file_path = f"{self.path}/{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.pkl"       
+            file_path = os.path.join(self.path, f"{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.pkl")
             self.last_save = file_path
+        print(f"Saving log to {file_path}...")
         with open(file_path, 'wb') as file:
             pickle.dump(self, file)
+        print("Log saved.")
 
     def save_txt(self):
-        file_path = f"{self.path}/{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.txt"
+        file_path = os.path.join(self.path, f"{self.prefix}_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}.txt")
         with open(file_path, 'w', encoding="utf-8") as file:
             file.write("Log saved on: ")
             file.write(datetime.now().strftime("%b %d %Y - %H:%M:%S") + "\n\n")
             if self.properties:
                 file.write("-----Properties-----\n\n")
-                file.write("\n".join(self.properties) + "\n\n")
+                for key, value in self.properties.items():
+                    file.write(f"{key}: {value}\n\n")
             if self.messages:
                 file.write("-----History-----\n\n")
                 file.write("\n".join(self.messages) + "\n\n")
