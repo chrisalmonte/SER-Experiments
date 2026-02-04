@@ -1,9 +1,9 @@
+import audioflux
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import torch
 import torch.nn.functional as F
-import torchaudio
 from torch.utils.data import Dataset
 
 class AudioDatasetCategory(Dataset):
@@ -18,7 +18,7 @@ class AudioDatasetCategory(Dataset):
 
     def __getitem__(self, idx):
         audio_path = os.path.join(self.audio_dir, self.audio_labels.iloc[idx, 0])
-        audio, sample_rate = torchaudio.load(audio_path)
+        audio = Utils.load_4_torch(audio_path)
         label = self.audio_labels.iloc[idx, 1]
         if self.transform:
             audio = self.transform(audio)
@@ -38,7 +38,7 @@ class AudioDatasetVAD(Dataset):
 
     def __getitem__(self, idx):
         audio_path = os.path.join(self.audio_dir, self.audio_labels.iloc[idx, 0])
-        audio, sample_rate = torchaudio.load(audio_path)
+        audio = Utils.load_4_torch(audio_path)
         val = self.audio_labels.iloc[idx, 2]
         act = self.audio_labels.iloc[idx, 1]
         dom = self.audio_labels.iloc[idx, 3]
@@ -120,12 +120,12 @@ class Collate:
 class Plot:
     @staticmethod
     def waveform(waveform, sample_rate, title="Waveform", xlim=None, ylim=None, size=(12, 4)):        
+        num_frames = waveform.size(0)
         waveform = waveform.numpy()
-        num_channels, num_frames = waveform.shape
         time_axis = torch.arange(0, num_frames) / sample_rate
 
         plt.figure(figsize=size)
-        plt.plot(time_axis, waveform[0])
+        plt.plot(time_axis, waveform)
         plt.title(title)
         plt.xlabel('Time (s)')
         plt.ylabel('Amplitude')
@@ -159,4 +159,11 @@ class Plot:
         plt.xlabel(xlabel)
         plt.colorbar()
         plt.show()
+
+class Utils:
+    @staticmethod
+    def load_4_torch(path):
+        audio, sample_rate = audioflux.read(path=path)
+        audio = torch.from_numpy(audio).float()
+        return audio
     
