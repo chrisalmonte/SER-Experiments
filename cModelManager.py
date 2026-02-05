@@ -6,7 +6,7 @@ from datetime import datetime
 
 class ModelManager:
     def __init__(self, model_directory: str):
-        self.model_directory = Directories.make_unique(model_directory)
+        self.run_name, self.model_directory = Directories.make_unique(model_directory)
         self.model = None
         self.optimizer = None
         self.loss_property_key = None
@@ -93,7 +93,8 @@ class ModelManager:
 class Directories:
     @staticmethod
     def make_unique(directory: str):
-        directory = os.path.join(directory, f"run_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}")
+        unique_name = f"run_{datetime.now().strftime('%Y_%m_%d-%H%M%S')}"
+        directory = os.path.join(directory, unique_name)
         if os.path.exists(directory):
             directory = directory + "_copy"
             print("The directory already exists. A new directory has been created:", directory)
@@ -103,6 +104,6 @@ class Directories:
             print("Directory created at:", directory)
         except Exception as e:
             raise OSError(f"The directory could not be created: {e}")
-        return directory
+        return unique_name, directory
             
         
