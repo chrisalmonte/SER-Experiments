@@ -5,8 +5,12 @@ import torch
 from datetime import datetime
 
 class ModelManager:
-    def __init__(self, model_directory: str):
-        self.run_name, self.model_directory = Directories.make_unique(model_directory)
+    def __init__(self, model_directory: str, new_run: bool = True):
+        if new_run:
+            self.run_name, self.model_directory = Directories.make_unique(model_directory)
+        else:
+            self.model_directory = model_directory
+            self.run_name = os.path.basename(model_directory)
         self.model = None
         self.optimizer = None
         self.loss_property_key = None
@@ -89,6 +93,28 @@ class ModelManager:
         self.model.load_state_dict(torch.load(path, weights_only=True))
         self.model.eval()
         print(f"Model loaded for inference from {path}")
+
+    def load_best(self, from_checkpoint: bool = False):        
+        if from_checkpoint:
+            checkpoint_path = os.path.join(self.model_directory, "checkpoints", "best.tar")
+            if not os.path.isfile(checkpoint_path):
+                raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
+
+            checkpoint = torch.load(checkpoint_path, weights_only=False)
+            epoch = checkpoint['epoch']
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            metrics = checkpoint['metrics']
+            self.model.train()
+            print(f"Best model checkpoint loaded from {checkpoint_path}, which was from epoch {epoch}")
+        else:
+            inf_path = os.path.join(self.model_directory, "best.pt")
+            if not os.path.isfile(inf_path):
+                raise FileNotFoundError(f"No model found at {inf_path}")
+
+            self.model.load_state_dict(torch.load(inf_path, weights_only=True))
+            self.model.eval()
+            print(f"Best model loaded for inference from {inf_path}")
 
 class Directories:
     @staticmethod
