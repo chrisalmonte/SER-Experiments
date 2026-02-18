@@ -67,4 +67,20 @@ class CNNRaw2VAD(nn.Module):
         pooled_embedding = self.masked_pool(features, downsampled_lengths)        
         logits = self.regression_head(pooled_embedding)
         return logits
+
+class LayerAutoPooling(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, embeddings):
+        # Stack layers (Num Layers, Batch, Dim)
+        x = torch.stack(embeddings, dim=0)
+
+        alpha_x = self.alpha * x
+        weights = nn.functional.softmax(alpha_x, dim=0)        
+        output = (x * weights).sum(dim=0)
+        
+        return output
+    
     

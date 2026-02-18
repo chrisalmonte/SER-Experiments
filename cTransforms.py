@@ -1,5 +1,4 @@
 import torch
-import torchaudio
 
 class Functions:
     @staticmethod
@@ -8,10 +7,10 @@ class Functions:
             return torch.mean(waveform, dim=0, keepdim=True)
         return waveform
 
-    @staticmethod
-    def resample(waveform, orig_freq, new_freq):
-        resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
-        return resampler(waveform)    
+    #@staticmethod
+    #def resample(waveform, orig_freq, new_freq):
+    #    resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
+    #    return resampler(waveform)    
 
 class NormalizeMinus(object):
     """
