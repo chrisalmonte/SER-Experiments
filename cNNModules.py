@@ -73,10 +73,7 @@ class LayerAutoPooling(nn.Module):
         super().__init__()
         self.alpha = nn.Parameter(torch.tensor(0.0))
 
-    def forward(self, embeddings):
-        # Stack layers (Num Layers, Batch, Dim)
-        x = torch.stack(embeddings, dim=0)
-
+    def forward(self, x):        
         alpha_x = self.alpha * x
         weights = nn.functional.softmax(alpha_x, dim=0)        
         output = (x * weights).sum(dim=0)
