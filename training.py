@@ -22,11 +22,11 @@ import cTransforms
 import cModelManager
 
 MODEL_NAME = "WavLM_L_VAD_LoRa"
-MODELS_DIR = "home/imd-temp/projects/SER-Experiments/output/models"
+MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 model_description = "WavLM finetuned using LoRA and avg. pooling for frame pooling and autopooling for Embedding pooling."
 
 #Define output paths
-log = cLogger.Log("home/imd-temp/projects/SER-Experiments/output/logs", prefix=MODEL_NAME)
+log = cLogger.Log("/home/imd-temp/projects/SER-Experiments/output/logs", prefix=MODEL_NAME)
 model_mngr = cModelManager.ModelManager(f"{MODELS_DIR}/{MODEL_NAME}")
 log.log_property("model_name", MODEL_NAME)
 log.log_property("model_description", model_description, show=False)
@@ -51,8 +51,8 @@ class Loss(Enum):
 
 #Parameters:
 loader_params = {
-    "dataset_dir": "home/imd-temp/datasets",
-    "dataset_labels": "home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
+    "dataset_dir": "/home/imd-temp/datasets",
+    "dataset_labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
     "dataset_train_partition": ("Split_Set", "Train"),
     "dataset_dev_partition": ("Split_Set", "Development"),
     "dataset_test_partition": ("Split_Set", "Test1"),
