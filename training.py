@@ -191,7 +191,7 @@ class NeuralNetwork(nn.Module):
         self.hidden_size = self.wavlm.config.hidden_size
 
         lora_config = LoraConfig(
-            r=4,                     # Rank
+            r=8,                     # Rank
             lora_alpha=16,           # Scaling factor
             target_modules=["q_proj", "v_proj"], # Inject LoRA into the Attention layers
             lora_dropout=0.1,        # Dropout specifically for the LoRA weights
