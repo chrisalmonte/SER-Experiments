@@ -22,11 +22,11 @@ import cTransforms
 import cModelManager
 
 MODEL_NAME = "WavLM_L_VAD_LoRa"
-MODELS_DIR = "home/imd-temp/output/models"
+MODELS_DIR = "home/imd-temp/projects/SER-Experiments/output/models"
 model_description = "WavLM finetuned using LoRA and avg. pooling for frame pooling and autopooling for Embedding pooling."
 
 #Define output paths
-log = cLogger.Log("home/imd-temp/output/logs", prefix=MODEL_NAME)
+log = cLogger.Log("home/imd-temp/projects/SER-Experiments/output/logs", prefix=MODEL_NAME)
 model_mngr = cModelManager.ModelManager(f"{MODELS_DIR}/{MODEL_NAME}")
 log.log_property("model_name", MODEL_NAME)
 log.log_property("model_description", model_description, show=False)
@@ -62,8 +62,8 @@ loader_params = {
     "data_transform": None,
     "target_transform": cTransforms.NormalizeMinus(1, 7),
     "pin_memory": True,
-    "num_workers": 0,
-    "persistent_workers": False,
+    "num_workers": 4,
+    "persistent_workers": True,
 }
 log.log_properties("Loader", loader_params, show=False)
 
