@@ -85,6 +85,7 @@ optimizer_params = {
     "learning_rate": 1e-3,
     "adam_betas": (0.9, 0.999),
     "adam_epsilon": 1e-8,
+    "weight_decay": 1e-4,
 }
 log.log_properties("Optimizer", optimizer_params, show=False)
 
@@ -190,7 +191,7 @@ class NeuralNetwork(nn.Module):
         self.hidden_size = self.wavlm.config.hidden_size
 
         lora_config = LoraConfig(
-            r=8,                     # Rank: The size of the adapter
+            r=4,                     # Rank
             lora_alpha=16,           # Scaling factor
             target_modules=["q_proj", "v_proj"], # Inject LoRA into the Attention layers
             lora_dropout=0.1,        # Dropout specifically for the LoRA weights
@@ -204,7 +205,6 @@ class NeuralNetwork(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.35),
             nn.Linear(256, 3),
-            nn.Tanh()
         )
 
         self.encoder_pooling = cNNModules.LayerAutoPooling()
@@ -244,11 +244,12 @@ log.log_property("model_structure", str(model))
 loss_fn = nn.MSELoss()
 log.log_property("loss_function", str(loss_fn))
 
-optimizer = torch.optim.Adam(
+optimizer = torch.optim.AdamW(
     model.parameters(), 
     lr=optimizer_params["learning_rate"], 
     betas=optimizer_params["adam_betas"],
-    eps=optimizer_params["adam_epsilon"]
+    eps=optimizer_params["adam_epsilon"],
+    weight_decay=optimizer_params["weight_decay"],
     )
 
 log.log_property("optimizer", str(optimizer))
