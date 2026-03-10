@@ -1,6 +1,9 @@
 ##----------------------Huggingface login---------------------
-from huggingface_hub import login
-login(token="")
+import sys
+if len(sys.argv) > 1:
+    from huggingface_hub import login
+    print("Attempting to log to Huggingface Hub.\n")
+    login(token=sys.argv[1])
 
 ##------------------------Model Properties-----------------------
 #Imports
@@ -19,11 +22,11 @@ import cTransforms
 import cModelManager
 
 MODEL_NAME = "WavLM_L_VAD_LoRa"
-MODELS_DIR = "output/models/"
+MODELS_DIR = "home/imd-temp/output/models"
 model_description = "WavLM finetuned using LoRA and avg. pooling for frame pooling and autopooling for Embedding pooling."
 
 #Define output paths
-log = cLogger.Log("output/logs", prefix=MODEL_NAME)
+log = cLogger.Log("home/imd-temp/output/logs", prefix=MODEL_NAME)
 model_mngr = cModelManager.ModelManager(f"{MODELS_DIR}/{MODEL_NAME}")
 log.log_property("model_name", MODEL_NAME)
 log.log_property("model_description", model_description, show=False)
@@ -48,12 +51,13 @@ class Loss(Enum):
 
 #Parameters:
 loader_params = {
-    "dataset_dir": r"C:/Datasets/_compiled/msp-podcast-2/Train",
-    "dataset_train": r"data/labels_msp_consensus_undersampled.csv",
-    "dataset_dev": r"data/labels_dev_msp_consensus_undersampled.csv",
-    "dataset_test": r"C:/Datasets/_compiled/msp-podcast-2/labels_test1_VAD.csv",
-    "batch_size": 2,
-    "shuffle": True,
+    "dataset_dir": "home/imd-temp/datasets",
+    "dataset_labels": "home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
+    "dataset_train_partition": ("Split_Set", "Train"),
+    "dataset_dev_partition": ("Split_Set", "Development"),
+    "dataset_test_partition": ("Split_Set", "Test1"),
+    "batch_size": 4,
+    "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
     "data_transform": None,
     "target_transform": cTransforms.NormalizeMinus(1, 7),
@@ -64,8 +68,8 @@ loader_params = {
 log.log_properties("Loader", loader_params, show=False)
 
 training_params = {
-    "epochs": 50,
-    "checkpoint_interval": 5,
+    "epochs": 30,
+    "checkpoint_interval": 6,
     "checkpoint_before_training": False,
     "criterion_for_best": Loss.avg_loss_val.value,
 }
@@ -89,24 +93,23 @@ log.log_properties("Optimizer", optimizer_params, show=False)
 #    "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(),
 #}
 
-audio_params = {
-    "sample_rate": 16000
-}
-log.log_properties("Audio", audio_params, show=False)
-
 
 # -------------------------- Create data loaders --------------------------
 #Train set
-dataset_train = cAudiotools.AudioDatasetVAD(
-    loader_params["dataset_train"], 
+dataset_train = cAudiotools.VADSubdirAudioDataset(
+    loader_params["dataset_labels"],
     loader_params["dataset_dir"],
+    ("EmoVal", "EmoAct", "EmoDom"),
     transform=loader_params["data_transform"],
-    target_transform=loader_params["target_transform"]
+    target_transform=loader_params["target_transform"],
+    subdir_column_name="Directory",
+    name_column_name="FileName",
+    include_only=loader_params["dataset_train_partition"]
     )
 dataset_train_loader = DataLoader(
     dataset_train,
     batch_size=loader_params["batch_size"],
-    shuffle=loader_params["shuffle"],
+    shuffle=loader_params["shuffle_train"],
     collate_fn=loader_params["collate_function"],
     pin_memory=loader_params["pin_memory"],
     num_workers=loader_params["num_workers"],
@@ -114,11 +117,15 @@ dataset_train_loader = DataLoader(
     )
 
 #Development (validation) set
-dataset_dev = cAudiotools.AudioDatasetVAD(
-    loader_params["dataset_dev"],
+dataset_dev = cAudiotools.VADSubdirAudioDataset(
+    loader_params["dataset_labels"],
     loader_params["dataset_dir"],
+    ("EmoVal", "EmoAct", "EmoDom"),
     transform=loader_params["data_transform"],
-    target_transform=loader_params["target_transform"]
+    target_transform=loader_params["target_transform"],
+    subdir_column_name="Directory",
+    name_column_name="FileName",
+    include_only=loader_params["dataset_dev_partition"]
     )
 dataset_dev_loader = DataLoader(
     dataset_dev,
@@ -131,11 +138,15 @@ dataset_dev_loader = DataLoader(
     )
 
 #Test set
-dataset_test = cAudiotools.AudioDatasetVAD(
-    loader_params["dataset_test"],
+dataset_test = cAudiotools.VADSubdirAudioDataset(
+    loader_params["dataset_labels"],
     loader_params["dataset_dir"],
+    ("EmoVal", "EmoAct", "EmoDom"),
     transform=loader_params["data_transform"],
-    target_transform=loader_params["target_transform"]
+    target_transform=loader_params["target_transform"],
+    subdir_column_name="Directory",
+    name_column_name="FileName",
+    include_only=loader_params["dataset_test_partition"]
     )
 dataset_test_loader = DataLoader(
     dataset_test,
@@ -145,16 +156,16 @@ dataset_test_loader = DataLoader(
     pin_memory=loader_params["pin_memory"],
     num_workers=loader_params["num_workers"],
     persistent_workers=loader_params["persistent_workers"],
-)
+    )
 
 # --------------------------- Data check -------------------------------
-log.log_message("\n----------Data Check------\n")
+log.log_message("\n********* Data Check *********\n")
 log.log_message(f"Train samples: {len(dataset_train)}")
 log.log_message(f"Dev samples: {len(dataset_dev)}")
 log.log_message(f"Test samples: {len(dataset_test)}")
 log.log_message(f"Batch size: {loader_params['batch_size']}")
 
-log.log_message("\n----------Sample Batch------\n")
+log.log_message("\n********* Sample Batch *********\n")
 sample_batch = next(iter(dataset_train_loader))
 inputs, masks, targets = sample_batch
 
@@ -350,7 +361,7 @@ log.track_time(True, message="Starting training.")
 total_epochs = training_params["epochs"]
 pinned_memory = loader_params["pin_memory"]
 
-log.log_message("\n------------Training -----------\n")
+log.log_message("\n********* Training *********\n")
 
 for epoch in range(total_epochs):
     log.log_message(f"Epoch {epoch + 1} of {total_epochs}...")
@@ -381,7 +392,7 @@ for epoch in range(total_epochs):
 if training_params["epochs"] % training_params["checkpoint_interval"] != 0:
     model_mngr.checkpoint(total_epochs, epoch_metrics)
 
-log.log_elapsed_time(message="Training completed")
+log.log_elapsed_time(message="\n Training completed \n")
 log.track_time(False, show=False)
 log.log_properties("Last_epoch", epoch_metrics)
 log.log_properties("Best_model", model_mngr.best_model_metrics | {"epoch": model_mngr.best_model_epoch})
@@ -396,17 +407,6 @@ model_mngr.save_best(save_for_inference=True)
 from torchmetrics.regression import ConcordanceCorrCoef
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-log.log_message(f"Test samples: {len(dataset_test)}")
-sample_batch = next(iter(dataset_test_loader))
-inputs, masks, targets = sample_batch
-
-log.log_message("Sample batch:")
-log.log_message(f"Inputs Shape: {inputs.shape}")
-log.log_message(f"Targets Shape: {targets.shape}")
-log.log_message(f"Lengths Shape: {masks.shape}")
-log.log_message(f"Input range: Min={inputs.min():.2f}, Max={inputs.max():.2f}")
-log.log_message(f"Output range: Min={targets.min():.2f}, Max={targets.max():.2f}")
-
 #Test loop
 def test_loop(dataloader, model, device, pinned_memory=False):
     total_predictions = []
@@ -414,7 +414,7 @@ def test_loop(dataloader, model, device, pinned_memory=False):
     model.eval()
 
     with torch.no_grad():
-        print("Starting evaluation...")
+        log.log_message("\n********* Testing *********\n")
         size = len(dataloader.dataset)
         for batch, (inputs, masks, targets) in enumerate(dataloader):
             inputs = inputs.to(device, non_blocking=pinned_memory)

@@ -51,7 +51,7 @@ class AudioDatasetVAD(Dataset):
 
 class VADSubdirAudioDataset(Dataset):
     def __init__(self, annotations_file, master_dir, vad_column_names, transform=None, target_transform=None, 
-                 subdir_column_name=None, name_column_name=None):
+                 subdir_column_name=None, name_column_name=None, include_only: tuple=None):
         self.labels = pd.read_csv(annotations_file)
         self.val_idx = self.labels.columns.get_loc(vad_column_names[0])
         self.act_idx = self.labels.columns.get_loc(vad_column_names[1])
@@ -61,6 +61,9 @@ class VADSubdirAudioDataset(Dataset):
         self.target_transform = target_transform
         self.subdir_idx = 0 if subdir_column_name is None else self.labels.columns.get_loc(subdir_column_name)
         self.name_idx = 1 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
+
+        if include_only is not None:
+            self.labels = self.labels[self.labels[include_only[0]] == include_only[1]].reset_index(drop=True)
 
     def __len__(self):
         return len(self.labels)
