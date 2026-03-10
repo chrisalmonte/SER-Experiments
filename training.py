@@ -56,7 +56,7 @@ loader_params = {
     "dataset_train_partition": ("Split_Set", "Train"),
     "dataset_dev_partition": ("Split_Set", "Development"),
     "dataset_test_partition": ("Split_Set", "Test1"),
-    "batch_size": 4,
+    "batch_size": 2,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
     "data_transform": None,
@@ -405,48 +405,42 @@ model_mngr.save_best(save_for_inference=True)
 
 
 #----------------------------- Evaluation -------------------------------
-from torchmetrics.regression import ConcordanceCorrCoef
-from sklearn.metrics import mean_squared_error, mean_absolute_error
+from torchmetrics.regression import ConcordanceCorrCoef, MeanSquaredError, MeanAbsoluteError
 
 #Test loop
 def test_loop(dataloader, model, device, pinned_memory=False):
-    total_predictions = []
-    total_targets = []
     model.eval()
 
+    concordance = ConcordanceCorrCoef(num_outputs=3).to(device)
+    mse = MeanSquaredError().to(device)
+    mae = MeanAbsoluteError().to(device)
+
     with torch.no_grad():
-        log.log_message("\n********* Testing *********\n")
-        size = len(dataloader.dataset)
-        for batch, (inputs, masks, targets) in enumerate(dataloader):
+        for inputs, masks, targets in tqdm(dataloader, total=len(dataloader)):
             inputs = inputs.to(device, non_blocking=pinned_memory)
             masks = masks.to(device, non_blocking=pinned_memory)
+            targets = targets.to(device, non_blocking=pinned_memory)
 
             pred = model(inputs, masks)
-            total_predictions.append(pred.cpu())
-            total_targets.append(targets)
-            if batch % 10 == 0:
-                current = batch * len(inputs)
-                print(f"[{current:>6d}/{size:>6d}] processed")
-        final_predictions = torch.cat(total_predictions, dim=0)
-        final_targets = torch.cat(total_targets, dim=0)
-        return final_predictions, final_targets
+            concordance.update(pred, targets)
+            mse.update(pred, targets)
+            mae.update(pred, targets)
 
-log.log_message(f"Targets shape: {targets.shape}")
-concordance = ConcordanceCorrCoef(num_outputs=3)
+        results = {
+            "Concordance_Correlation_Coefficient": concordance.compute().cpu().tolist(),
+            "Mean_Squared_Error": mse.compute().item(),
+            "Mean_Absolute_Error": mae.compute().item()
+        }
+            
+        return results
+
+log.log_message("\n********* Testing *********\n")
 
 for mode in ["Final", "Best"]:
     if mode == "Best":
-        model_mngr.load_best()
-    
+        model_mngr.load_best()    
     log.log_message(f"Evaluating model ({mode})...")
-    predictions, targets = test_loop(dataset_test_loader, model, device, pinned_memory=loader_params["pin_memory"])
-    log.log_message(f"Predictions shape ({mode}): {predictions.shape}")
-
-    results = {
-        "Concordance_Correlation_Coefficient": concordance(predictions, targets).tolist(),
-        "Mean_Squared_Error": mean_squared_error(targets.numpy(), predictions.numpy()),
-        "Mean_Absolute_Error": mean_absolute_error(targets.numpy(), predictions.numpy())
-    }
+    results = test_loop(dataset_test_loader, model, device, pinned_memory=loader_params["pin_memory"])
     log.log_properties(f"Test_results ({mode})", results)
     
 log.save()
