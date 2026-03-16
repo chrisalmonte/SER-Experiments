@@ -26,8 +26,8 @@ MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 model_description = "WavLM finetuned using LoRA and avg. pooling for frame pooling and autopooling for Embedding pooling."
 
 #Define output paths
-log = cLogger.Log("/home/imd-temp/projects/SER-Experiments/output/logs", prefix=MODEL_NAME)
 model_mngr = cModelManager.ModelManager(f"{MODELS_DIR}/{MODEL_NAME}")
+log = cLogger.Log(model_mngr.model_directory, prefix=MODEL_NAME)
 log.log_property("model_name", MODEL_NAME)
 log.log_property("model_description", model_description, show=False)
 log.log_property("model_dir", model_mngr.model_directory, show=False)
