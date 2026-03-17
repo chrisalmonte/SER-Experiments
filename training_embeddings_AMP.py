@@ -68,7 +68,7 @@ loader_params = {
 log.log_properties("Loader", loader_params, show=False)
 
 training_params = {
-    "epochs": 30,
+    "epochs": 50,
     "checkpoint_interval": 6,
     "checkpoint_before_training": False,
     "criterion_for_best": Loss.avg_loss_val.value,
@@ -89,10 +89,11 @@ optimizer_params = {
 }
 log.log_properties("Optimizer", optimizer_params, show=False)
 
-#scheduler_params = {
-#    "use_scheduler": True,
-#    "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(),
-#}
+scheduler_params = {
+    "use_scheduler": True,
+    "eta_min": 1e-5,
+}
+log.log_properties("Scheduler", scheduler_params, show=False)
 
 
 # -------------------------- Create data loaders --------------------------
@@ -173,18 +174,17 @@ log.log_message(f"Output range: Min={targets.min():.2f}, Max={targets.max():.2f}
 
 
 # --------------------------- Define model -------------------------------
+from cNNModules import CCCLoss
+
 class NeuralNetwork(nn.Module):
     def __init__(self):
         super().__init__()
 
         self.regression_head = nn.Sequential(
-            nn.Linear(768, 312),
-            nn.LeakyReLU(),
-            nn.Dropout(0.25),
-            nn.Linear(312, 99),
-            nn.LeakyReLU(),
-            nn.Dropout(0.25),
-            nn.Linear(99, 3),
+            nn.Linear(768, 256),
+            nn.ReLU(),
+            nn.Dropout(0.35),
+            nn.Linear(256, 3),
         )
 
     def forward(self, input):
@@ -195,7 +195,7 @@ class NeuralNetwork(nn.Module):
 model = NeuralNetwork().to(device)
 log.log_property("model_structure", str(model))
 
-loss_fn = nn.MSELoss()
+loss_fn = CCCLoss()
 log.log_property("loss_function", str(loss_fn))
 
 optimizer = torch.optim.AdamW(
@@ -205,8 +205,16 @@ optimizer = torch.optim.AdamW(
     eps=optimizer_params["adam_epsilon"],
     weight_decay=optimizer_params["weight_decay"],
     )
-
 log.log_property("optimizer", str(optimizer))
+
+
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, 
+    T_max=training_params["epochs"], 
+    eta_min=scheduler_params["eta_min"]
+)
+if scheduler_params["use_scheduler"]:
+    log.log_property("scheduler", str(scheduler))
 
 
 #---------------------------------- Training ------------------------------------
@@ -338,6 +346,9 @@ for epoch in range(total_epochs):
     #log.log_elapsed_time(message=f"Epoch {epoch + 1} completed.")
     log.log_epoch(epoch + 1, epoch_metrics)
     log.save()
+
+    if scheduler_params["use_scheduler"]:
+        scheduler.step()
     
     #Checkpointing
     remaining_for_checkpoint -= 1
