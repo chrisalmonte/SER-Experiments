@@ -16,3 +16,4 @@ dependencies:
   - transformers
   - ffmpeg=6
   - torchmetrics
+  - peft
