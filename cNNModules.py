@@ -79,5 +79,39 @@ class LayerAutoPooling(nn.Module):
         output = (x * weights).sum(dim=0)
         
         return output
+
+class CCCLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, predictions, targets):
+        loss = 0.0
+
+        for i in range(predictions.shape[1]):
+            pred = predictions[:, i]
+            target = targets[:, i]
+            
+            # 1. Means
+            pred_mean = torch.mean(pred)
+            target_mean = torch.mean(target)
+            
+            # 2. Variances (unbiased=False to keep standard population variance)
+            pred_var = torch.var(pred, unbiased=False)
+            target_var = torch.var(target, unbiased=False)
+            
+            # 3. Covariance
+            covar = torch.mean((pred - pred_mean) * (target - target_mean))
+            
+            # 4. CCC Formula
+            numerator = 2 * covar
+            denominator = pred_var + target_var + (pred_mean - target_mean)**2
+            
+            # Add epsilon
+            ccc = numerator / (denominator + 1e-8) 
+            
+            # 5. Minimize
+            loss += (1.0 - ccc)
+            
+        return loss / predictions.shape[1]
     
     
