@@ -53,9 +53,9 @@ class Loss(Enum):
 loader_params = {
     "dataset_dir": "/home/imd-temp/datasets",
     "dataset_labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
-    "dataset_train_partition": ("Split_Set", "Train"),
-    "dataset_dev_partition": ("Split_Set", "Development"),
-    "dataset_test_partition": ("Split_Set", "Test1"),
+    "dataset_train_partition": ("Split_Set", ["Train"]),
+    "dataset_dev_partition": ("Split_Set", ["Development"]),
+    "dataset_test_partition": ("Split_Set", ["Test1"]),
     "batch_size": 2,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,

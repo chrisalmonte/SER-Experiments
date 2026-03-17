@@ -63,7 +63,7 @@ class VADSubdirAudioDataset(Dataset):
         self.name_idx = 1 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
 
         if include_only is not None:
-            self.labels = self.labels[self.labels[include_only[0]] == include_only[1]].reset_index(drop=True)
+            self.labels = self.labels[self.labels[include_only[0]].isin(include_only[1])].reset_index(drop=True)
 
     def __len__(self):
         return len(self.labels)
@@ -198,4 +198,9 @@ class Utils:
         audio, sample_rate = audioflux.read(path=path)
         audio = torch.from_numpy(audio).float()
         return audio
+    
+    @staticmethod
+    def load_as_np(path):
+        audio, sample_rate = audioflux.read(path=path)
+        return (audio, sample_rate)
     
