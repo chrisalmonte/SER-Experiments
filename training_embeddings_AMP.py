@@ -51,6 +51,7 @@ class Loss(Enum):
 
 #Parameters:
 loader_params = {
+    "dataset_labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
     "embeddings_dir": "/home/imd-temp/datasets/msp-podcast-2_divided/e2v_embeddings",
     "dataset_train_partition": ("Split_Set", ["Train"]),
     "dataset_dev_partition": ("Split_Set", ["Development"]),
