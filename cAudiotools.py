@@ -101,7 +101,7 @@ class VADEmbeddingsDataset(Dataset):
         return len(self.labels)
     
     def __getitem__(self, idx):
-        embedding_path = os.path.join(self.embeddings_dir, self.labels.iloc[idx, self.name_idx] + ".npy")
+        embedding_path = os.path.join(self.embeddings_dir, self.labels.iloc[idx, self.name_idx].replace('.wav', '.npy'))
         embedding = torch.from_numpy(np.load(embedding_path)).float()
         val = self.labels.iloc[idx, self.val_idx]
         act = self.labels.iloc[idx, self.act_idx]
