@@ -81,37 +81,27 @@ class LayerAutoPooling(nn.Module):
         return output
 
 class CCCLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, eps=1e-8):
         super().__init__()
+        self.eps = eps
 
     def forward(self, predictions, targets):
-        loss = 0.0
-
-        for i in range(predictions.shape[1]):
-            pred = predictions[:, i]
-            target = targets[:, i]
-            
-            # 1. Means
-            pred_mean = torch.mean(pred)
-            target_mean = torch.mean(target)
-            
-            # 2. Variances (unbiased=False to keep standard population variance)
-            pred_var = torch.var(pred, unbiased=False)
-            target_var = torch.var(target, unbiased=False)
-            
-            # 3. Covariance
-            covar = torch.mean((pred - pred_mean) * (target - target_mean))
-            
-            # 4. CCC Formula
-            numerator = 2 * covar
-            denominator = pred_var + target_var + (pred_mean - target_mean)**2
-            
-            # Add epsilon
-            ccc = numerator / (denominator + 1e-8) 
-            
-            # 5. Minimize
-            loss += (1.0 - ccc)
-            
-        return loss / predictions.shape[1]
+        # Calculate across the batch (dim=0) for each output feature (V, A, D)
+        pred_mean = torch.mean(predictions, dim=0)
+        target_mean = torch.mean(targets, dim=0)
+        
+        pred_var = torch.var(predictions, dim=0, unbiased=False)
+        target_var = torch.var(targets, dim=0, unbiased=False)
+        
+        # Vectorized Covariance
+        covariance = torch.mean((predictions - pred_mean) * (targets - target_mean), dim=0)
+        
+        # CCC Calculation
+        numerator = 2 * covariance
+        denominator = pred_var + target_var + (pred_mean - target_mean)**2
+        
+        ccc = numerator / (denominator + self.eps)
+        
+        return torch.mean(1.0 - ccc)
     
     
