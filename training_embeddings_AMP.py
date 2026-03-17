@@ -168,7 +168,6 @@ inputs, targets = sample_batch
 
 log.log_message(f"Inputs Shape: {inputs.shape}")
 log.log_message(f"Targets Shape: {targets.shape}")
-log.log_message(f"Input range: Min={inputs.min():.2f}, Max={inputs.max():.2f}")
 log.log_message(f"Output range: Min={targets.min():.2f}, Max={targets.max():.2f}")
 
 
