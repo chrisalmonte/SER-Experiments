@@ -56,7 +56,7 @@ loader_params = {
     "dataset_train_partition": ("Split_Set", ["Train"]),
     "dataset_dev_partition": ("Split_Set", ["Development"]),
     "dataset_test_partition": ("Split_Set", ["Test1"]),
-    "batch_size": 16,
+    "batch_size": 32,
     "shuffle_train": True,
     "collate_function": None,
     "data_transform": None,
@@ -68,7 +68,7 @@ loader_params = {
 log.log_properties("Loader", loader_params, show=False)
 
 training_params = {
-    "epochs": 50,
+    "epochs": 30,
     "checkpoint_interval": 6,
     "checkpoint_before_training": False,
     "criterion_for_best": Loss.avg_loss_val.value,
@@ -181,10 +181,21 @@ class NeuralNetwork(nn.Module):
         super().__init__()
 
         self.regression_head = nn.Sequential(
-            nn.Linear(768, 256),
-            nn.ReLU(),
-            nn.Dropout(0.35),
-            nn.Linear(256, 3),
+            nn.Linear(768, 512),
+            nn.BatchNorm1d(512),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),
+            
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),
+            
+            nn.Linear(256, 64),
+            nn.BatchNorm1d(64),
+            nn.LeakyReLU(),
+            
+            nn.Linear(64, 3)
         )
 
     def forward(self, input):
