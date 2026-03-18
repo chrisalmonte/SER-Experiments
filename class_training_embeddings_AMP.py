@@ -53,9 +53,9 @@ class Loss(Enum):
 loader_params = {
     "dataset_labels": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech.csv",
     "embeddings_dir": "/home/imd-temp/datasets/ravdess/Audio_Speech_Actors_01-24/e2v_embeddings_utterance",
-    "dataset_train_partition": ("SpkrID", [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]),
-    "dataset_dev_partition": ("SpkrID", [21,22,23,24]),
-    "dataset_test_partition": ("SpkrID", [16,17,18,19,20]),
+    "dataset_train_partition": ("SpkrID", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
+    "dataset_dev_partition": ("SpkrID", [21, 22, 23, 24]),
+    "dataset_test_partition": ("SpkrID", [16, 17, 18, 19, 20]),
     "batch_size": 64,
     "shuffle_train": True,
     "collate_function": None,
@@ -449,7 +449,7 @@ def test_loop(dataloader, model, num_classes, output_map, device, pinned_memory=
             "F1_Score_Macro": f1_macro.compute().item(),
             "Precision_Macro": precision.compute().item(),
             "Recall_Macro": recall.compute().item(),
-            "Confusion_Matrix": matrix_str
+            "Confusion_Matrix": f"\n{matrix_str}"
         }            
         return results
 

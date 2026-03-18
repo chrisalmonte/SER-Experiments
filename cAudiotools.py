@@ -123,12 +123,14 @@ class ClassEmbeddingsDataset(Dataset):
         self.target_transform = target_transform
         self.name_idx = 0 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
 
-        if include_only is not None:
+        if include_only:
             self.labels = self.labels[self.labels[include_only[0]].isin(include_only[1])].reset_index(drop=True)
-
-        if mappings_dict is not None:
-            self.labels.iloc[:, self.class_idx] = self.labels.iloc[:, self.class_idx].map(mappings_dict)
-
+        
+        if mappings_dict:
+            col_name = self.labels.columns[self.class_idx]
+            self.labels[col_name] = self.labels[col_name].map(mappings_dict)
+            col_name = self.labels.columns[self.class_idx]
+            
     def __len__(self):
         return len(self.labels)
     
