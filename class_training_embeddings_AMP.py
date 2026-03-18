@@ -23,7 +23,7 @@ import cModelManager
 
 MODEL_NAME = "emotion2vec_Class"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
-model_description = "Emotion class Regression using emotion2vec as a feature extractor."
+model_description = "Emotion classification using emotion2vec as a feature extractor."
 
 #Define output paths
 model_mngr = cModelManager.ModelManager(f"{MODELS_DIR}/{MODEL_NAME}")
@@ -51,8 +51,8 @@ class Loss(Enum):
 
 #Parameters:
 loader_params = {
-    "dataset_labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
-    "embeddings_dir": "/home/imd-temp/datasets/msp-podcast-2_divided/e2v_embeddings",
+    "dataset_labels": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech.csv",
+    "embeddings_dir": "/home/imd-temp/datasets/ravdess/Audio_Speech_Actors_01-24/e2v_embeddings_utterance",
     "dataset_train_partition": ("SpkrID", [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]),
     "dataset_dev_partition": ("SpkrID", [21,22,23,24]),
     "dataset_test_partition": ("SpkrID", [16,17,18,19,20]),
