@@ -1,8 +1,8 @@
 import os
 import pandas as pd
 
-DATASET_DIRECTORY = "/home/imd-temp/datsets/"
-RAVDESS_ROOT = "ravdess/Audio_Speech_Actors_01-24/" 
+DATASET_DIRECTORY = "/home/imd-temp/datasets"
+RAVDESS_ROOT = "ravdess/Audio_Speech_Actors_01-24" 
 OUTPUT_CSV_FILE = "ravdess_labels_speech.csv"
 
 # Mapping following MSP-Podcast nomenclature
@@ -23,7 +23,7 @@ INTENSITY_MAP = {
     '02': 'strong'
 }
 
-def parse_ravdess_filename(filename, actor_dir):
+def parse_ravdess_filename(filename, subdir):
     """Parses a RAVDESS filename and returns a dictionary of attributes."""
     name_without_ext = os.path.splitext(filename)[0]
     parts = name_without_ext.split('-')
@@ -41,7 +41,7 @@ def parse_ravdess_filename(filename, actor_dir):
     gender = 'Female' if speaker_id % 2 == 0 else 'Male'
     
     return {
-        'Directory': actor_dir,
+        'Directory': subdir,
         'FileName': filename,
         'EmoClass': EMOTION_MAP.get(emotion_code, 'unknown'),
         'EmoInt': INTENSITY_MAP.get(intensity_code, 'unknown'),
@@ -53,7 +53,8 @@ def parse_ravdess_filename(filename, actor_dir):
 dataset_rows = []
 
 for actor in range(1, 25):
-    actor_dir = f"{DATASET_DIRECTORY}/{RAVDESS_ROOT}/Actor_{actor:02d}"
+    subdir = f"{RAVDESS_ROOT}/Actor_{actor:02d}"
+    actor_dir = f"{DATASET_DIRECTORY}/{subdir}"
     if not os.path.exists(actor_dir):
         print(f"Warning: Actor directory not found: {actor_dir}")
         continue
@@ -61,12 +62,12 @@ for actor in range(1, 25):
     print(f"Scanning directory: {actor_dir}...")
 
     for filename in os.listdir(actor_dir):            
-        row_data = parse_ravdess_filename(filename, actor_dir)
+        row_data = parse_ravdess_filename(filename, subdir)
         if row_data:
             dataset_rows.append(row_data)
 
 if dataset_rows:
-        df = pd.DataFrame(dataset_rows)
-        df.to_csv(OUTPUT_CSV_FILE, index=False)
-        print(f"Saved to: {OUTPUT_CSV_FILE}\n")
-        print(df.head(10))
+    df = pd.DataFrame(dataset_rows)
+    df.to_csv(OUTPUT_CSV_FILE, index=False)
+    print(f"Saved to: {OUTPUT_CSV_FILE}\n")
+    print(df.head(10))

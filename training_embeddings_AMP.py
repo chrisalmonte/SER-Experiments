@@ -56,7 +56,7 @@ loader_params = {
     "dataset_train_partition": ("Split_Set", ["Train"]),
     "dataset_dev_partition": ("Split_Set", ["Development"]),
     "dataset_test_partition": ("Split_Set", ["Test1"]),
-    "batch_size": 32,
+    "batch_size": 64,
     "shuffle_train": True,
     "collate_function": None,
     "data_transform": None,
@@ -68,7 +68,7 @@ loader_params = {
 log.log_properties("Loader", loader_params, show=False)
 
 training_params = {
-    "epochs": 30,
+    "epochs": 50,
     "checkpoint_interval": 6,
     "checkpoint_before_training": False,
     "criterion_for_best": Loss.avg_loss_val.value,
