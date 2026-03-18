@@ -129,9 +129,7 @@ class Log:
         if save_path:
             plt.savefig(save_path)
             print(f"Plot saved to {save_path}")
-        plt.show()
-
-        
+        plt.show()        
     
     @staticmethod
     def str_property(property):

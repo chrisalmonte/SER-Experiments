@@ -112,6 +112,35 @@ class VADEmbeddingsDataset(Dataset):
         if self.target_transform:
             vad = self.target_transform(vad)
         return embedding, vad
+    
+class ClassEmbeddingsDataset(Dataset):
+    def __init__(self, annotations_file, embeddings_dir, class_column_name, mappings_dict=None, transform=None, target_transform=None, 
+                 name_column_name=None, include_only: tuple=None):
+        self.labels = pd.read_csv(annotations_file)
+        self.class_idx = self.labels.columns.get_loc(class_column_name)
+        self.embeddings_dir = embeddings_dir
+        self.transform = transform
+        self.target_transform = target_transform
+        self.name_idx = 0 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
+
+        if include_only is not None:
+            self.labels = self.labels[self.labels[include_only[0]].isin(include_only[1])].reset_index(drop=True)
+
+        if mappings_dict is not None:
+            self.labels.iloc[:, self.class_idx] = self.labels.iloc[:, self.class_idx].map(mappings_dict)
+
+    def __len__(self):
+        return len(self.labels)
+    
+    def __getitem__(self, idx):
+        embedding_path = os.path.join(self.embeddings_dir, self.labels.iloc[idx, self.name_idx].replace('.wav', '.npy'))
+        embedding = torch.from_numpy(np.load(embedding_path)).float()
+        class_label = self.labels.iloc[idx, self.class_idx]
+        if self.transform:
+            embedding = self.transform(embedding)
+        if self.target_transform:
+            class_label = self.target_transform(class_label)
+        return embedding, class_label
 
 class Collate:    
     @staticmethod
