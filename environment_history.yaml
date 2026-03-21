@@ -17,3 +17,4 @@ dependencies:
   - ffmpeg=6
   - torchmetrics
   - peft
+  - audiomentations
