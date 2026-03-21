@@ -71,7 +71,7 @@ class VADSubdirAudioDataset(Dataset):
     
     def __getitem__(self, idx):
         audio_path = os.path.join(self.master_dir, self.labels.iloc[idx, self.subdir_idx], self.labels.iloc[idx, self.name_idx])
-        audio = Utils.load_4_torch(audio_path)
+        audio, sample_rate = Utils.load_as_np(audio_path)
         val = self.labels.iloc[idx, self.val_idx]
         act = self.labels.iloc[idx, self.act_idx]
         dom = self.labels.iloc[idx, self.dom_idx]
@@ -80,6 +80,7 @@ class VADSubdirAudioDataset(Dataset):
             audio = self.transform(audio)
         if self.target_transform:
             vad = self.target_transform(vad)
+        audio = torch.from_numpy(audio).float()
         return audio, vad
     
 class VADEmbeddingsDataset(Dataset):

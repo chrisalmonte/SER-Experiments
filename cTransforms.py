@@ -1,16 +1,12 @@
 import torch
+from audiomentations import Compose, Shift
 
 class Functions:
     @staticmethod
     def mono(waveform):
         if waveform.size(0) > 1:
             return torch.mean(waveform, dim=0, keepdim=True)
-        return waveform
-
-    #@staticmethod
-    #def resample(waveform, orig_freq, new_freq):
-    #    resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
-    #    return resampler(waveform)    
+        return waveform    
 
 class NormalizeMinus(object):
     """
@@ -46,3 +42,14 @@ class AudioPadTrimTo(object):
         else:
             padding = self.max_length - waveform.size(1)
             return torch.nn.functional.pad(waveform, (0, padding))
+        
+class ShiftSample(object):
+    def __init__(self, min=-0.25, max=0.25, unit="seconds", prob=0.5, sample_rate=16000):
+        self.sample_rate = sample_rate
+        self.augment = Compose([
+            Shift(min_fraction=min, max_fraction=max, shift_unit=unit, rollover=False, p=prob),
+        ])
+
+    def __call__(self, waveform_np):
+        augmented_waveform = self.augment(samples=waveform_np, sample_rate=self.sample_rate)
+        return augmented_waveform
