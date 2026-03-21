@@ -86,7 +86,7 @@ log.log_properties("Loader", loader_params, show=False)
 
 training_params = {
     "epochs": 30,
-    "loss_function": cNNModules.CCCLoss(),
+    "loss_function": nn.MSELoss(),
     "checkpoint_interval": 6,
     "checkpoint_before_training": False,
     "criterion_for_best": Loss.avg_loss_val.value,
@@ -158,7 +158,7 @@ dataset_dev = cAudiotools.VADSubdirAudioDataset(
     loader_params["dataset_labels"],
     loader_params["dataset_dir"],
     ("EmoVal", "EmoAct", "EmoDom"),
-    transform=loader_params["data_transform"],
+    transform=None,
     target_transform=loader_params["target_transform"],
     subdir_column_name="Directory",
     name_column_name="FileName",
@@ -179,7 +179,7 @@ dataset_test = cAudiotools.VADSubdirAudioDataset(
     loader_params["dataset_labels"],
     loader_params["dataset_dir"],
     ("EmoVal", "EmoAct", "EmoDom"),
-    transform=loader_params["data_transform"],
+    transform=None,
     target_transform=loader_params["target_transform"],
     subdir_column_name="Directory",
     name_column_name="FileName",
@@ -260,7 +260,7 @@ class NeuralNetwork(nn.Module):
             m = nn.functional.interpolate(m, size=feat_len, mode='nearest')
             # Reshape to broadcast across Layers and Hidden_Size
             # (Batch, 1, Mask Downsampled frames) -> (Batch, 1, Mask Downsampled frames, 1)
-            m = attention_masks.unsqueeze(-1).float()
+            m = m.unsqueeze(-1).float()
 
             #-------Apply Mask------- 
             
@@ -296,11 +296,11 @@ class NeuralNetwork(nn.Module):
 
     def forward(self, input, attention_masks):
         ssl_output = self.wavlm(input, attention_mask=attention_masks, output_hidden_states=True)        
-        hidden_states = torch.stack(ssl_output.hidden_states, dim=0)
+        hidden_states = torch.stack(ssl_output.hidden_states, dim=1)
         # Shape: (Batch, Layers, Time, Hidden)        
         utterance_raw = self.frame_statistical_pooling(hidden_states, attention_masks)
         # Shape: (Batch, Layers, Hidden * 2)
-        utterance_weighted = self.encoder_pooling(utterance_raw)
+        utterance_weighted = self.encoder_pooling(utterance_raw, layers_dim=1)
         # Shape: (Batch, Hidden)
         logits = self.regression_head(utterance_weighted)
         return logits
@@ -309,15 +309,6 @@ model = NeuralNetwork(wavlm_backbone).to(device)
 log.log_property("model_structure", str(model))
 
 loss_fn = training_params["loss_function"]
-
-optimizer = torch.optim.AdamW(
-    model.parameters(), 
-    lr=optimizer_params["learning_rate"], 
-    betas=optimizer_params["adam_betas"],
-    eps=optimizer_params["adam_epsilon"],
-    weight_decay=optimizer_params["weight_decay"],
-    )
-log.log_property("optimizer", str(optimizer))
 
 optimizer = torch.optim.AdamW([
     # LoRA for WavLM
@@ -485,7 +476,6 @@ for epoch in range(total_epochs):
     
     validation_loop(dataset_dev_loader, model, loss_fn, metrics_dict=epoch_metrics, pinned_memory=pinned_memory)
 
-    #log.log_elapsed_time(message=f"Epoch {epoch + 1} completed.")
     log.log_epoch(epoch + 1, epoch_metrics)
     log.save()
 
@@ -497,6 +487,9 @@ for epoch in range(total_epochs):
     if remaining_for_checkpoint == 0:
         model_mngr.checkpoint(epoch + 1, epoch_metrics)
         remaining_for_checkpoint = training_params["checkpoint_interval"]
+    
+    #Save best model
+    model_mngr.check_best(epoch + 1, epoch_metrics)
 
 #Save last checkpoint if not saved at the end of training
 if training_params["epochs"] % training_params["checkpoint_interval"] != 0:
@@ -510,7 +503,6 @@ log.save()
 log.plot_epoch_values(save_path=f'{model_mngr.model_directory}/epoch_values.png')
 
 model_mngr.save_for_inference()
-model_mngr.save_best(save_for_inference=True)
 
 
 #----------------------------- Evaluation -------------------------------

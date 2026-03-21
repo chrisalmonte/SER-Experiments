@@ -24,7 +24,7 @@ class LayerAutoPooling(nn.Module):
         super().__init__()
         self.alpha = nn.Parameter(torch.tensor(0.0))
 
-    def forward(self, x, layers_dim=1):
+    def forward(self, x, layers_dim=0):
         # x shape: (Batch, Layers, Hidden)        
         alpha_x = self.alpha * x
         weights = nn.functional.softmax(alpha_x, dim=layers_dim)
