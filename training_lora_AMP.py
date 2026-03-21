@@ -29,7 +29,6 @@ Key Differences:
  + Statistical pooling as frame pooling.
  + Time shifting, masking and frequency masking. 
  + VAD output values range is 1 to 7.
- + CCC Loss function.
  + 2 Hidden Layers
 """
 
@@ -312,7 +311,7 @@ loss_fn = training_params["loss_function"]
 
 optimizer = torch.optim.AdamW([
     # LoRA for WavLM
-    {'params': model.wavlm.parameters(), 
+    {'params': [p for p in model.wavlm.parameters() if p.requires_grad], 
      'lr': optimizer_params["LoRA_learning_rate"],
      'betas': optimizer_params["LoRA_adam_betas"],
      'eps': optimizer_params["LoRA_adam_epsilon"], 
@@ -522,7 +521,9 @@ def test_loop(dataloader, model, device, pinned_memory=False):
             masks = masks.to(device, non_blocking=pinned_memory)
             targets = targets.to(device, non_blocking=pinned_memory)
 
-            pred = model(inputs, masks)
+            with torch.amp.autocast('cuda'):
+                pred = model(inputs, masks)
+
             concordance.update(pred, targets)
             mse.update(pred, targets)
             mae.update(pred, targets)
