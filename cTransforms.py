@@ -47,7 +47,7 @@ class ShiftSample(object):
     def __init__(self, min=-0.25, max=0.25, unit="seconds", prob=0.5, sample_rate=16000):
         self.sample_rate = sample_rate
         self.augment = Compose([
-            Shift(min_fraction=min, max_fraction=max, shift_unit=unit, rollover=False, p=prob),
+            Shift(min_shift=min, max_shift=max, shift_unit=unit, rollover=False, p=prob),
         ])
 
     def __call__(self, waveform_np):
