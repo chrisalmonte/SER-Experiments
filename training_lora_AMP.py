@@ -21,11 +21,11 @@ import cTransforms
 import cModelManagerLRA
 import cNNModules
 
-MODEL_NAME = "WavLM_L_VAD_LoRa"
+MODEL_NAME = "WavLM_BP_VAD_LoRa"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 model_description = """
-WavLM large finetuned using LoRA for VAD reggression on MSP-podcast 2.
-Key Differences:
+WavLM BasePlus finetuned using LoRA for VAD reggression on MSP-podcast 2.
+Features:
  + Statistical pooling as frame pooling.
  + Time shifting, masking and frequency masking. 
  + VAD output values range is 1 to 7.
@@ -74,6 +74,7 @@ loader_params = {
     "dataset_dev_partition": ("Split_Set", ["Development"]),
     "dataset_test_partition": ("Split_Set", ["Test1"]),
     "batch_size": 2,
+    "batch_size_test": 8,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
     "data_transform": cTransforms.ShiftSample(**shift_params),
@@ -100,7 +101,7 @@ grad_acumulation_params = {
 log.log_properties("Gradient Accumulation", grad_acumulation_params, show=False)
 
 wavlm_params = {
-    "model_name": "microsoft/wavlm-large",
+    "model_name": "microsoft/wavlm-base-plus",
     "use_spec_augment": True,
     "mask_time_prob": 0.05,    # 5% of the time steps will be masked
     "mask_time_length": 10,    # Each mask will be 10 frames long (approx 0.2 seconds)
@@ -188,7 +189,7 @@ dataset_test = cAudiotools.VADSubdirAudioDataset(
     )
 dataset_test_loader = DataLoader(
     dataset_test,
-    batch_size=loader_params["batch_size"],
+    batch_size=loader_params["batch_size_test"],
     shuffle=False,
     collate_fn=loader_params["collate_function"],
     pin_memory=loader_params["pin_memory"],
@@ -229,18 +230,18 @@ class NeuralNetwork(nn.Module):
         self.wavlm = get_peft_model(self.wavlm, lora_config)
 
         self.regression_head = nn.Sequential(
-            nn.Linear(self.hidden_size*2, 612),
+            nn.Linear(self.hidden_size*2, 812),
             nn.LeakyReLU(),
             nn.Dropout(0.25),
             
-            nn.Linear(612, 256),
+            nn.Linear(812, 360),
             nn.LeakyReLU(),
             nn.Dropout(0.2),
             
-            nn.Linear(256, 64),
+            nn.Linear(360, 120),
             nn.LeakyReLU(),
             
-            nn.Linear(64, 3)
+            nn.Linear(120, 3)
         )
 
         self.encoder_pooling = cNNModules.LayerAutoPooling()
