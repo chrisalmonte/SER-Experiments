@@ -23,15 +23,20 @@ else:
     log = cLogger.Log('output/logs')
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device.type, "cpu")
+print("Device: ", device.type)
 
 results = None
+model = None
 
 # PASTE MODEL STRUCTURE AND SET MODEL MANAGER
 
 # PASTE DATSET LOADER AND TEST LOOP. 
 
-# SAVE RESULTS TO LOG
+# SAVE RESULTS TO VARIABLE
+
+model.to(device)
+model_manager.set_model(model, "", None)
+model_manager.load_checkpoint(f"{model_manager.model_directory}/checkpoints/best", for_inference=True)
 
 # Save
 log.log_properties(f"Test_results ({TEST_NAME})", results)
