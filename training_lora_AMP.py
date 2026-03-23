@@ -504,8 +504,6 @@ log.log_properties("Best_model", model_mngr.best_model_metrics | {"epoch": model
 log.save()
 log.plot_epoch_values(save_path=f'{model_mngr.model_directory}/epoch_values.png')
 
-model_mngr.save_for_inference()
-
 
 #----------------------------- Evaluation -------------------------------
 from torchmetrics.regression import ConcordanceCorrCoef, MeanSquaredError, MeanAbsoluteError
@@ -543,7 +541,7 @@ log.log_message("\n********* Testing *********\n")
 
 for mode in ["Final", "Best"]:
     if mode == "Best":
-        model_mngr.load_best()    
+        model_mngr.load_checkpoint(f"{model_mngr.model_directory}/checkpoints/best", for_inference=True)    
     log.log_message(f"Evaluating model ({mode})...")
     results = test_loop(dataset_test_loader, model, device, pinned_memory=loader_params["pin_memory"])
     log.log_properties(f"Test_results ({mode})", results)
