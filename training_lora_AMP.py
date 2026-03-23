@@ -29,7 +29,7 @@ Key Differences:
  + Statistical pooling as frame pooling.
  + Time shifting, masking and frequency masking. 
  + VAD output values range is 1 to 7.
- + 2 Hidden Layers
+ + 2 Hidden Layers to regression head, with LeakyReLU.
 """
 
 #Define output paths
@@ -68,6 +68,7 @@ log.log_properties("Shift Augmentation", shift_params, show=False)
 
 loader_params = {
     "dataset_dir": "/home/imd-temp/datasets",
+    "dataset_train_labels": '/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_train_u_3000.csv',
     "dataset_labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
     "dataset_train_partition": ("Split_Set", ["Train"]),
     "dataset_dev_partition": ("Split_Set", ["Development"]),
@@ -84,9 +85,9 @@ loader_params = {
 log.log_properties("Loader", loader_params, show=False)
 
 training_params = {
-    "epochs": 30,
+    "epochs": 50,
     "loss_function": nn.MSELoss(),
-    "checkpoint_interval": 6,
+    "checkpoint_interval": 5,
     "checkpoint_before_training": False,
     "criterion_for_best": Loss.avg_loss_val.value,
 }
@@ -106,6 +107,7 @@ wavlm_params = {
     "mask_feature_prob": 0.05, # 5% of the frequency/feature dimensions will be masked
     "mask_feature_length": 10  # Each mask covers 10 feature channels
 }
+log.log_properties("WavLM", wavlm_params, show=False)
 
 optimizer_params = {    
     "LoRA_learning_rate": 1e-4,
@@ -133,7 +135,7 @@ log.log_properties("Scheduler Parameters", scheduler_params, show=False)
 # -------------------------- Create data loaders --------------------------
 #Train set
 dataset_train = cAudiotools.VADSubdirAudioDataset(
-    loader_params["dataset_labels"],
+    loader_params["dataset_train_labels"],
     loader_params["dataset_dir"],
     ("EmoVal", "EmoAct", "EmoDom"),
     transform=loader_params["data_transform"],
@@ -431,7 +433,7 @@ def validation_loop(dataloader, model, loss_fn, metrics_dict=None, pinned_memory
     test_loss = 0
 
     with torch.no_grad():
-        for inputs, masks, targets  in dataloader:
+        for inputs, masks, targets  in tqdm(dataloader, total=len(dataloader)):
             inputs = inputs.to(device, non_blocking=pinned_memory)
             targets = targets.to(device, non_blocking=pinned_memory)
             masks = masks.to(device, non_blocking=pinned_memory)
@@ -473,6 +475,7 @@ for epoch in range(total_epochs):
     else:
         train_loop(dataset_train_loader, model, loss_fn, optimizer, metrics_dict=epoch_metrics, pinned_memory=pinned_memory)
     
+    log.log_message("Validation")
     validation_loop(dataset_dev_loader, model, loss_fn, metrics_dict=epoch_metrics, pinned_memory=pinned_memory)
 
     log.log_epoch(epoch + 1, epoch_metrics)
