@@ -22,6 +22,9 @@ if LOG_PATH:
 else:
     log = cLogger.Log('output/logs')
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device.type, "cpu")
+
 results = None
 
 # PASTE MODEL STRUCTURE AND SET MODEL MANAGER
