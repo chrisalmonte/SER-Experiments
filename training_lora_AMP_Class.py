@@ -23,6 +23,8 @@ import cNNModules
 
 MODEL_NAME = "WavLM_BP_Class_LoRa"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
+RESUME_FROM = None
+
 model_description = """
 WavLM BasePlus finetuned using LoRA for VAD classification on MSP-podcast 2.
 Features:
@@ -33,22 +35,25 @@ Features:
 """
 
 #Define output paths
-model_mngr = cModelManagerLRA.ModelManager(f"{MODELS_DIR}/{MODEL_NAME}")
+model_mngr = cModelManagerLRA.ModelManager(f"{MODELS_DIR}/{MODEL_NAME}", new_run=not RESUME_FROM)
 log = cLogger.Log(model_mngr.model_directory, prefix=MODEL_NAME)
-log.log_property("model_name", MODEL_NAME)
-log.log_property("model_description", model_description, show=False)
-log.log_property("model_dir", model_mngr.model_directory, show=False)
 
 #Torch properties and device
-log.log_property("torch_version", torch.__version__)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if device.type == "cuda":
-    log.log_property("device", "cuda")
-    log.log_property("GPU_count", torch.cuda.device_count())
-    log.log_property("GPU_device", torch.cuda.get_device_name(0))
+if not RESUME_FROM:
+    log.log_property("torch_version", torch.__version__)
+    log.log_property("model_name", MODEL_NAME)
+    log.log_property("model_description", model_description, show=False)
+    log.log_property("model_dir", model_mngr.model_directory, show=False)
+    if device.type == "cuda":
+        log.log_property("device", "cuda")
+        log.log_property("GPU_count", torch.cuda.device_count())
+        log.log_property("GPU_device", torch.cuda.get_device_name(0))
+    else:
+        log.log_property("device", "cpu")
 else:
-    log.log_property("device", "cpu")
+    log.log_message(f"\n********** Resuming from epoch {RESUME_FROM} ********\n")
 
 
 #-------------------------- Define parameters --------------------------
@@ -64,7 +69,6 @@ shift_params = {
     "unit": "seconds",
     "prob": 0.5,
 }
-log.log_properties("Shift Augmentation", shift_params, show=False)
 
 loader_params = {
     "dataset_dir": "/home/imd-temp/datasets",
@@ -86,7 +90,6 @@ loader_params = {
     "num_workers": 4,
     "persistent_workers": True,
 }
-log.log_properties("Loader", loader_params, show=False)
 
 class_params = {
     "output_map": {
@@ -112,7 +115,6 @@ class_params = {
 if class_params["label_map"]:
     if len(class_params["label_map"]) != len(class_params["output_map"]):
         raise ValueError("Mismatch between number of classes and maps.")
-log.log_property("Classes ", class_params, show=False)
 
 training_params = {
     "epochs": 50,
@@ -121,13 +123,11 @@ training_params = {
     "checkpoint_before_training": False,
     "criterion_for_best": Loss.avg_loss_val.value,
 }
-log.log_properties("Training", training_params, show=False)
 
 grad_acumulation_params = {
     "use_grad_accumulation": True,
     "simulated_batch_size": 32,
 }
-log.log_properties("Gradient Accumulation", grad_acumulation_params, show=False)
 
 wavlm_params = {
     "model_name": "microsoft/wavlm-base-plus",
@@ -137,7 +137,6 @@ wavlm_params = {
     "mask_feature_prob": 0.05, # 5% of the frequency/feature dimensions will be masked
     "mask_feature_length": 10  # Each mask covers 10 feature channels
 }
-log.log_properties("WavLM", wavlm_params, show=False)
 
 optimizer_params = {    
     "LoRA_learning_rate": 1e-4,
@@ -153,13 +152,26 @@ optimizer_params = {
     "Pooling_adam_epsilon": 1e-8,
     "Pooling_weight_decay": 0,
 }
-log.log_properties("Optimizer Parameters", optimizer_params, show=False)
 
 scheduler_params = {
     "use_scheduler": False,
     "eta_min": 1e-5,
 }
-log.log_properties("Scheduler Parameters", scheduler_params, show=False)
+
+if RESUME_FROM:
+    target_epochs = training_params["epochs"]
+    if target_epochs <= RESUME_FROM:
+        raise ValueError(f"Target epochs ({target_epochs}) must be greater than the epoch to resume from ({RESUME_FROM}).")
+    log.log_property("new_target_epochs", target_epochs)
+else:
+    log.log_properties("Shift Augmentation", shift_params, show=False)
+    log.log_properties("Loader", loader_params, show=False)
+    log.log_property("Classes ", class_params, show=False)
+    log.log_properties("Training", training_params, show=False)
+    log.log_properties("Gradient Accumulation", grad_acumulation_params, show=False)
+    log.log_properties("WavLM", wavlm_params, show=False)
+    log.log_properties("Optimizer Parameters", optimizer_params, show=False)
+    log.log_properties("Scheduler Parameters", scheduler_params, show=False)
 
 
 # -------------------------- Create data loaders --------------------------
@@ -340,8 +352,6 @@ class NeuralNetwork(nn.Module):
         return logits
 
 model = NeuralNetwork(wavlm_backbone).to(device)
-log.log_property("model_structure", str(model))
-
 loss_fn = training_params["loss_function"]
 
 optimizer = torch.optim.AdamW([
@@ -372,6 +382,9 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     T_max=training_params["epochs"], 
     eta_min=scheduler_params["eta_min"]
 )
+
+if not RESUME_FROM:
+    log.log_property("model_structure", str(model))
 
 
 # --------------------------- Data check -------------------------------
@@ -484,21 +497,24 @@ def validation_loop(dataloader, model, loss_fn, metrics_dict=None, pinned_memory
 #Set Model Manager
 model_mngr.set_model(model, optimizer, training_params["criterion_for_best"])
 
-#Training
-epoch_metrics = {Loss.avg_loss_train.value: math.inf, Loss.avg_loss_val.value: math.inf}
+if RESUME_FROM:
+    epoch_start, epoch_metrics = model_mngr.load_checkpoint(f"{model_mngr.model_directory}/checkpoints/epoch_{RESUME_FROM}")
+    model_mngr.load_best_metrics(f"{model_mngr.model_directory}/checkpoints/best/training_state.pt")
+else:
+    epoch_start = 0
+    epoch_metrics = {Loss.avg_loss_train.value: math.inf, Loss.avg_loss_val.value: math.inf}
+    if training_params["checkpoint_before_training"]:
+            model_mngr.checkpoint(0, epoch_metrics)
+            log.save()
+
 remaining_for_checkpoint = training_params["checkpoint_interval"]
-
-if training_params["checkpoint_before_training"]:
-        model_mngr.checkpoint(0, epoch_metrics)
-        log.save()
-
 log.track_time(True, message="Starting training.")
 total_epochs = training_params["epochs"]
 pinned_memory = loader_params["pin_memory"]
 
 log.log_message("\n********* Training *********\n")
 
-for epoch in range(total_epochs):
+for epoch in range(epoch_start, total_epochs):
     log.log_message(f"Epoch {epoch + 1} of {total_epochs}...")
     
     if grad_acumulation_params["use_grad_accumulation"]:
@@ -532,10 +548,10 @@ if training_params["epochs"] % training_params["checkpoint_interval"] != 0:
 
 log.log_elapsed_time(message="\n Training completed \n")
 log.track_time(False, show=False)
-log.log_properties("Last_epoch", epoch_metrics)
+log.log_properties(f"Last_epoch ({total_epochs})", epoch_metrics)
 log.log_properties("Best_model", model_mngr.best_model_metrics | {"epoch": model_mngr.best_model_epoch})
 log.save()
-log.plot_epoch_values(save_path=f'{model_mngr.model_directory}/epoch_values.png')
+log.plot_epoch_values(save_path=f'{model_mngr.model_directory}/epoch_values_{total_epochs}.png')
 
 
 #----------------------------- Evaluation -------------------------------
@@ -591,7 +607,7 @@ for mode in ["Final", "Best"]:
         model_mngr.load_checkpoint(f"{model_mngr.model_directory}/checkpoints/best", for_inference=True)    
     log.log_message(f"Evaluating model ({mode})...")
     results = test_loop(dataset_test_loader, model, len(class_params["output_map"]), class_params["output_map"], device, pinned_memory=loader_params["pin_memory"])
-    log.log_properties(f"Test_results ({mode})", results)
+    log.log_properties(f"Test_results ({mode} up to {total_epochs})", results)
     
 log.save()
 log.save_txt()

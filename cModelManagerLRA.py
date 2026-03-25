@@ -107,6 +107,16 @@ class ModelManager:
             self.model.train()
             print('Model set to training mode.')
         return epoch, metrics
+    
+    def load_best_metrics(self, checkpoint_path: str):
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"No training state found at {checkpoint_path}")
+        
+        state = torch.load(checkpoint_path, weights_only=True)        
+        self.best_model_epoch = state['epoch']
+        self.best_model_metrics = state['metrics']
+        print(f"Best model metrics loaded from {checkpoint_path}: {self.best_model_metrics}")
+        return self.best_model_epoch, self.best_model_metrics
 
 class Directories:
     @staticmethod
