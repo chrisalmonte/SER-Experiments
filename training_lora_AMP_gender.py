@@ -453,6 +453,7 @@ def validation_loop(dataloader, model, loss_fn, metrics_dict=None, pinned_memory
             inputs = inputs.to(device, non_blocking=pinned_memory)
             targets = targets.to(device, non_blocking=pinned_memory)
             masks = masks.to(device, non_blocking=pinned_memory)
+            genders = genders.to(device, non_blocking=pinned_memory)
 
             with torch.amp.autocast('cuda'):
                 pred = model(inputs, masks, genders)
