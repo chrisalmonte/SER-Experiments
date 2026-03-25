@@ -114,6 +114,7 @@ class VADSubdirAudioDatasetGender(Dataset):
         val = self.labels.iloc[idx, self.val_idx]
         act = self.labels.iloc[idx, self.act_idx]
         dom = self.labels.iloc[idx, self.dom_idx]
+        vad = torch.tensor([val, act, dom], dtype=torch.float32)
         gender = self.labels.iloc[idx, self.gender_idx]
         gender = torch.tensor(gender, dtype=torch.long)
         gender = torch.nn.functional.one_hot(gender, num_classes=3).float()
