@@ -575,9 +575,8 @@ def test_loop(dataloader, model, num_classes, output_map, device, pinned_memory=
             targets = targets.to(device, non_blocking=pinned_memory)
 
             with torch.amp.autocast('cuda'):
-                logits = model(inputs)
+                logits = model(inputs, masks)
                 pred = torch.argmax(logits, dim=1)
-                pred = model(inputs, masks)
 
             accuracy.update(pred, targets)
             f1_macro.update(pred, targets)
