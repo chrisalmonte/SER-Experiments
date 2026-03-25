@@ -81,7 +81,48 @@ class VADSubdirAudioDataset(Dataset):
         if self.target_transform:
             vad = self.target_transform(vad)
         audio = torch.from_numpy(audio).float()
-        return audio, vad    
+        return audio, vad
+    
+class VADSubdirAudioDatasetGender(Dataset):
+    def __init__(self, annotations_file, master_dir, vad_column_names, gender_column_name, transform=None, target_transform=None, 
+                 subdir_column_name=None, name_column_name=None, include_only: tuple=None, gender_map_dict=None):
+        self.labels = pd.read_csv(annotations_file)
+        self.val_idx = self.labels.columns.get_loc(vad_column_names[0])
+        self.act_idx = self.labels.columns.get_loc(vad_column_names[1])
+        self.dom_idx = self.labels.columns.get_loc(vad_column_names[2])
+        self.gender_idx = self.labels.columns.get_loc(gender_column_name)
+        self.master_dir = master_dir
+        self.transform = transform
+        self.target_transform = target_transform
+        self.subdir_idx = 0 if subdir_column_name is None else self.labels.columns.get_loc(subdir_column_name)
+        self.name_idx = 1 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
+
+        if include_only is not None:
+            self.labels = self.labels[self.labels[include_only[0]].isin(include_only[1])].reset_index(drop=True)
+        
+        if gender_map_dict:
+            col_name = self.labels.columns[self.gender_idx]
+            self.labels[col_name] = self.labels[col_name].map(gender_map_dict)
+            col_name = self.labels.columns[self.gender_idx]
+
+    def __len__(self):
+        return len(self.labels)
+    
+    def __getitem__(self, idx):
+        audio_path = os.path.join(self.master_dir, self.labels.iloc[idx, self.subdir_idx], self.labels.iloc[idx, self.name_idx])
+        audio, sample_rate = Utils.load_as_np(audio_path)
+        val = self.labels.iloc[idx, self.val_idx]
+        act = self.labels.iloc[idx, self.act_idx]
+        dom = self.labels.iloc[idx, self.dom_idx]
+        gender = self.labels.iloc[idx, self.gender_idx]
+        gender = torch.tensor(gender, dtype=torch.long)
+        gender = torch.nn.functional.one_hot(gender, num_classes=3).float()
+        if self.transform:
+            audio = self.transform(audio)
+        if self.target_transform:
+            vad = self.target_transform(vad)
+        audio = torch.from_numpy(audio).float()
+        return audio, vad, gender    
 
 class ClassSubdirAudioDataset(Dataset):
     def __init__(self, annotations_file, master_dir, class_column_name, transform=None, target_transform=None, 
@@ -246,7 +287,36 @@ class Collate:
         batch_targets = torch.stack(batch_targets, dim=0)
 
         return batch_inputs, batch_masks, batch_targets
-    
+
+    @staticmethod
+    def waveform_dynamic_wMasks_gender(batch):
+        audio_waveforms, batch_targets, genders = zip(*batch)
+
+        # pad_sequence expects a list of 1D tensors (Time,), not (1, Time)
+        processed_waveforms = []
+        lengths = []
+        for wav in audio_waveforms:
+            squeezed_wav = wav.squeeze()
+            processed_waveforms.append(squeezed_wav)
+            lengths.append(squeezed_wav.size(0))
+
+        batch_inputs = torch.nn.utils.rnn.pad_sequence(processed_waveforms, batch_first=True, padding_value=0.0)
+
+        #Create Masks (Vectorized)
+        max_len = batch_inputs.shape[1]
+
+        lengths_tensor = torch.tensor(lengths).unsqueeze(1) # Shape: (Batch, 1)
+        range_tensor = torch.arange(max_len).unsqueeze(0)   # Shape: (1, Max_Len)
+        batch_masks = (range_tensor < lengths_tensor).long()
+
+        #Stack Targets
+        batch_targets = torch.stack(batch_targets, dim=0)
+
+        #Stack Genders
+        genders = torch.stack(genders, dim=0)
+
+        return batch_inputs, batch_masks, batch_targets, genders
+
 class Plot:
     @staticmethod
     def waveform(waveform, sample_rate, title="Waveform", xlim=None, ylim=None, size=(12, 4)):        
