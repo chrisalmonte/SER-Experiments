@@ -26,11 +26,10 @@ MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 RESUME_FROM = None
 
 model_description = """
-WavLM BasePlus finetuned using LoRA for VAD classification on MSP-podcast 2.
+WavLM BasePlus finetuned using LoRA for Emotion classification on MSP-podcast 2.
 Features:
  + Statistical pooling as frame pooling.
- + Time shifting, masking and frequency masking. 
- + VAD output values range is 1 to 7.
+ + Time shifting, masking and frequency masking.
  + 2 Hidden Layers to classification head, with LeakyReLU.
 """
 
@@ -52,8 +51,7 @@ if not RESUME_FROM:
         log.log_property("GPU_device", torch.cuda.get_device_name(0))
     else:
         log.log_property("device", "cpu")
-else:
-    log.log_message(f"\n********** Resuming from epoch {RESUME_FROM} ********\n")
+    
 
 
 #-------------------------- Define parameters --------------------------
@@ -162,6 +160,7 @@ if RESUME_FROM:
     target_epochs = training_params["epochs"]
     if target_epochs <= RESUME_FROM:
         raise ValueError(f"Target epochs ({target_epochs}) must be greater than the epoch to resume from ({RESUME_FROM}).")
+    log.log_message(f"\n********** Resuming from epoch {RESUME_FROM} ********\n")
     log.log_property("new_target_epochs", target_epochs)
 else:
     log.log_properties("Shift Augmentation", shift_params, show=False)
