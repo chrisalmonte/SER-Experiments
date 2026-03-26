@@ -73,7 +73,73 @@ def get_representative_vad(df, emotion_col, vad_cols, target_points=2000):
     # Return a new dataframe containing ONLY our representative points
     return df.loc[representative_rows].drop_duplicates()
 
+def get_core_representatives(df, emotion_col, vad_cols, target_points=2000):
+    """
+    Extracts the most representative (dense core) VAD points for each emotion category,
+    ignoring boundary extremes.
+    """
+    representative_rows = []
+    
+    # Group the dataset by emotional category
+    grouped = df.groupby(emotion_col)
+    
+    for emotion, group in grouped:
+        print(f"Processing: {emotion} (Total samples: {len(group)})")
+
+        if len(group) <= target_points:
+            print(f"  -> Only {len(group)} samples available, adding all to representatives.")
+            representative_rows.extend(group.index.values)
+            continue
+        
+        # Extract the 3D coordinates (Valence, Activation, Dominance)
+        points = group[vad_cols].values
+        original_indices = group.index.values 
+        
+        # 1. Safety Check: Count strictly unique physical coordinates
+        unique_points = np.unique(points, axis=0)
+        max_possible_clusters = len(unique_points)
+        
+        # K-Means cannot look for more clusters than unique points available
+        actual_clusters = min(target_points, max_possible_clusters)
+        
+        if actual_clusters < target_points:
+             print(f"  -> Note: Capping at {actual_clusters} unique core points (requested {target_points}).")
+
+        if actual_clusters == 0:
+            continue
+            
+        # 2. Extract the Prototypes (K-Means)
+        # We fit K-Means on ALL points (not just unique ones) so the algorithm 
+        # is correctly magnetically pulled toward the highest density areas.
+        kmeans = KMeans(n_clusters=actual_clusters, random_state=42, n_init="auto")
+        kmeans.fit(points)
+        centroids = kmeans.cluster_centers_
+        
+        # 3. "Snap" to Real Data
+        # Calculate distance between every mathematical centroid and every real point
+        dists = distance.cdist(centroids, points, metric='euclidean')
+        
+        # Find the index of the closest actual point for each centroid
+        closest_local_indices = np.argmin(dists, axis=1)
+        
+        # Map back to the original dataframe indices and ensure we don't grab duplicate rows
+        core_indices_global = np.unique(original_indices[closest_local_indices])
+        
+        representative_rows.extend(core_indices_global)
+
+    # Return a new dataframe containing ONLY our representative points
+    return df.loc[representative_rows].drop_duplicates()
+
+# --- Example Usage ---
+# core_df = get_core_representatives(
+#     df=your_massive_dataframe, 
+#     emotion_col='emotion', 
+#     vad_cols=['valence', 'activation', 'dominance'], 
+#     target_points=2000
+# )
+
 df = pd.read_csv(r"C:\Datasets\MSP-PODCAST-Publish-2.0\Labels\custom\divided_labels_consensus_fs.csv")
 df = df[df['Split_Set'] == 'Train']
-undersampled = get_representative_vad(df, 'EmoClass', ['EmoAct', 'EmoVal', 'EmoDom'], target_points=3000)
-undersampled.to_csv('msp_undersampled.csv', index=False)
+df = df[~df['EmoClass'].isin(["X", "O"])]
+undersampled = get_core_representatives(df, 'EmoClass', ['EmoAct', 'EmoVal', 'EmoDom'], target_points=3500)
+undersampled.to_csv('divided_labels_emo_core_3500.csv', index=False)
