@@ -42,7 +42,6 @@ class WeightedAveragePooling(nn.Module):
     def forward(self, x):
         # x shape: (Batch, Layers, Hidden)
         
-        # Apply softmax to guarantee weights sum to 1 (mimics the division in the formula)
         norm_weights = nn.functional.softmax(self.weights, dim=0)
         
         # Reshape to (1, weights, 1) for broadcasting
