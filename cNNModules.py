@@ -33,7 +33,7 @@ class LayerAutoPooling(nn.Module):
         
         return output
     
-class WeightedAveragePooling(nn.Module):
+class LayerWeightedAvgPooling(nn.Module):
     def __init__(self, num_layers):
         super().__init__()
         # Initialize with 1's at the start
