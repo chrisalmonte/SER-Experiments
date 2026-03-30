@@ -28,6 +28,7 @@ RESUME_FROM = None
 model_description = """
 WavLM BasePlus finetuned using LoRA for VAD reggression on MSP-podcast 2.
 Features:
+ + WAP for layer pooling.
  + Statistical pooling as frame pooling.
  + Time shifting, masking and frequency masking. 
  + VAD output values range is 1 to 7.
@@ -255,7 +256,7 @@ class NeuralNetwork(nn.Module):
             nn.Linear(120, 3)
         )
 
-        self.encoder_pooling = cNNModules.LayerAutoPooling()
+        self.encoder_pooling = cNNModules.LayerWeightedAvgPooling(self.hidden_size + 1)
     
     def frame_statistical_pooling(self, features, attention_masks=None):
         #Features shape: (Batch, Layers, Frames, Hidden_Size)
@@ -313,7 +314,7 @@ class NeuralNetwork(nn.Module):
         # Shape: (Batch, Layers, Time, Hidden)        
         utterance_raw = self.frame_statistical_pooling(hidden_states, attention_masks)
         # Shape: (Batch, Layers, Hidden * 2)
-        utterance_weighted = self.encoder_pooling(utterance_raw, layers_dim=1)
+        utterance_weighted = self.encoder_pooling(utterance_raw)
         # Shape: (Batch, Hidden)
         logits = self.regression_head(utterance_weighted)
         return logits
