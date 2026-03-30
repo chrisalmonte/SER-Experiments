@@ -1,11 +1,12 @@
-##----------------------Huggingface login---------------------
+# region ----------------------Huggingface login---------------------
 import sys
 if len(sys.argv) > 1:
     from huggingface_hub import login
     print("Attempting to log to Huggingface Hub.\n")
     login(token=sys.argv[1])
+# endregion
 
-##------------------------Model Properties-----------------------
+# region ------------------------Model Properties-----------------------
 #Imports
 from enum import Enum
 import math
@@ -53,9 +54,9 @@ if not RESUME_FROM:
         log.log_property("GPU_device", torch.cuda.get_device_name(0))
     else:
         log.log_property("device", "cpu")
+# endregion
 
-
-#-------------------------- Define parameters --------------------------
+# region -------------------------- Define parameters --------------------------
 class Loss(Enum):
     avg_loss_val = "Validation avg. loss"
     avg_loss_train = "Training avg. loss"
@@ -144,8 +145,9 @@ else:
     log.log_properties("Optimizer Parameters", optimizer_params, show=False)
     log.log_properties("Scheduler Parameters", scheduler_params, show=False)
 
+# endregion
 
-# -------------------------- Create data loaders --------------------------
+# region -------------------------- Create data loaders --------------------------
 #Train set
 dataset_train = cAudiotools.VADSubdirAudioDataset(
     loader_params["dataset_train_labels"],
@@ -208,8 +210,9 @@ dataset_test_loader = DataLoader(
     num_workers=loader_params["num_workers"],
     persistent_workers=loader_params["persistent_workers"],
     )
+# endregion
 
-# --------------------------- Define model -------------------------------
+# region --------------------------- Define model -------------------------------
 from transformers import WavLMModel, WavLMConfig
 from peft import LoraConfig, get_peft_model
 
@@ -256,7 +259,7 @@ class NeuralNetwork(nn.Module):
             nn.Linear(120, 3)
         )
 
-        self.encoder_pooling = cNNModules.LayerWeightedAvgPooling(self.hidden_size + 1)
+        self.encoder_pooling = cNNModules.LayerWeightedAvgPooling(self.wavlm.config.num_hidden_layers + 1)
     
     def frame_statistical_pooling(self, features, attention_masks=None):
         #Features shape: (Batch, Layers, Frames, Hidden_Size)
@@ -354,8 +357,9 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
 if not RESUME_FROM:
     log.log_property("model_structure", str(model))
 
+# endregion
 
-# --------------------------- Data check -------------------------------
+# region --------------------------- Data check -------------------------------
 log.log_message("\n********* Data Check *********\n")
 log.log_message(f"Train samples: {len(dataset_train)}")
 log.log_message(f"Dev samples: {len(dataset_dev)}")
@@ -521,8 +525,9 @@ log.log_properties("Best_model", model_mngr.best_model_metrics | {"epoch": model
 log.save()
 log.plot_epoch_values(save_path=f'{model_mngr.model_directory}/epoch_values_{total_epochs}.png')
 
+# endregion
 
-#----------------------------- Evaluation -------------------------------
+# region----------------------------- Evaluation -------------------------------
 from torchmetrics.regression import ConcordanceCorrCoef, MeanSquaredError, MeanAbsoluteError
 
 #Test loop
@@ -565,3 +570,5 @@ for mode in ["Final", "Best"]:
     
 log.save()
 log.save_txt()
+
+#endregion
