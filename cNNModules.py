@@ -32,6 +32,26 @@ class LayerAutoPooling(nn.Module):
         output = (x * weights).sum(dim=layers_dim)
         
         return output
+    
+class WeightedAveragePooling(nn.Module):
+    def __init__(self, num_layers):
+        super().__init__()
+        # Initialize with 1's at the start
+        self.weights = nn.Parameter(torch.ones(num_layers))
+
+    def forward(self, x):
+        # x shape: (Batch, Layers, Hidden)
+        
+        # Apply softmax to guarantee weights sum to 1 (mimics the division in the formula)
+        norm_weights = nn.functional.softmax(self.weights, dim=0)
+        
+        # Reshape to (1, weights, 1) for broadcasting
+        norm_weights = norm_weights.unsqueeze(0).unsqueeze(-1)
+        
+        # Multiply by weights and sum across the layers dimension
+        output = (x * norm_weights).sum(dim=1)
+        
+        return output
 
 class CCCLoss(nn.Module):
     def __init__(self, eps=1e-8):
