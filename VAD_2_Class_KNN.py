@@ -18,13 +18,20 @@ model_mngr = ModelManager(f"{MODELS_DIR}/{MODEL_NAME}")
 log = Log(model_mngr.model_directory, prefix=MODEL_NAME)
 
 fitting_properties = {
-    "K": 10,
+    "K": 7,
     "weights": 'distance',
     "labels": r'C:\Datasets\MSP-PODCAST-Publish-2.0\Labels\labels_consensus.csv',
     "drop_labels": ('EmoClass', ['X', 'O']), #Can be None
     "train_set": ['Train', 'Development'],
     "test_set": ['Test1', 'Test2'],
     "SMOTE_K": 5, #Can be None
+    "SMOTE_strategy": { #Can be 'auto'
+        'S': 28000,
+        'U': 28000,
+        'C': 28000,
+        'D': 28000,
+        'F': 28000
+    }
 }
 log.log_properties("Fitting Properties", fitting_properties, show=False)
 
@@ -50,7 +57,7 @@ X_test_scaled = scaler.transform(X_test)
 #SMOTE
 if fitting_properties["SMOTE_K"]:    
     log.log_message(f"Applying SMOTE with k_neighbors={fitting_properties['SMOTE_K']}...")
-    smote = SMOTE(random_state=999, k_neighbors=fitting_properties["SMOTE_K"])
+    smote = SMOTE(random_state=999, k_neighbors=fitting_properties["SMOTE_K"], sampling_strategy=fitting_properties["SMOTE_strategy"])
     X_train_smote, y_train_smote = smote.fit_resample(X_train_scaled, y_train)
     
     log.log_message(f"Original Train Size: {len(X_train_scaled)}")
