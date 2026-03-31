@@ -1,7 +1,7 @@
 import joblib
 import os
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import classification_report, accuracy_score
@@ -20,11 +20,11 @@ log = Log(model_mngr.model_directory, prefix=MODEL_NAME)
 fitting_properties = {
     "K": 10,
     "weights": 'distance',
-    "labels_train": 'output/processing/custom_labels/mspp2/divided_labels_class_core_3000.csv', # can be None
-    "labels": 'C:\Datasets\MSP-PODCAST-Publish-2.0\Labels\labels_consensus.csv',
+    "labels": r'C:\Datasets\MSP-PODCAST-Publish-2.0\Labels\labels_consensus.csv',
     "drop_labels": ('EmoClass', ['X', 'O']), #Can be None
     "train_set": ['Train', 'Development'],
     "test_set": ['Test1', 'Test2'],
+    "SMOTE_K": 5, #Can be None
 }
 log.log_properties("Fitting Properties", fitting_properties, show=False)
 
@@ -34,11 +34,7 @@ if fitting_properties["drop_labels"]:
     column, labels = fitting_properties["drop_labels"]
     df = df[~df[column].isin(labels)]
 
-if fitting_properties["labels_train"]:
-    df_train = pd.read_csv(fitting_properties["labels_train"])
-else:
-    df_train = df[df['Split_Set'].isin(fitting_properties["train_set"])]
-
+df_train = df[df['Split_Set'].isin(fitting_properties["train_set"])]
 df_test = df[df['Split_Set'].isin(fitting_properties["test_set"])]
 
 X_train = df_train[['EmoVal', 'EmoAct', 'EmoDom']]
@@ -50,6 +46,17 @@ y_test = df_test['EmoClass']
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
+
+#SMOTE
+if fitting_properties["SMOTE_K"]:    
+    log.log_message(f"Applying SMOTE with k_neighbors={fitting_properties['SMOTE_K']}...")
+    smote = SMOTE(random_state=999, k_neighbors=fitting_properties["SMOTE_K"])
+    X_train_smote, y_train_smote = smote.fit_resample(X_train_scaled, y_train)
+    
+    log.log_message(f"Original Train Size: {len(X_train_scaled)}")
+    log.log_message(f"SMOTE Train Size: {len(X_train_smote)}")
+    X_train_scaled = X_train_smote
+    y_train = y_train_smote
 
 knn = KNeighborsClassifier(n_neighbors=fitting_properties["K"], weights=fitting_properties["weights"]) 
 knn.fit(X_train_scaled, y_train)
