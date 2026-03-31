@@ -20,7 +20,7 @@ log = Log(model_mngr.model_directory, prefix=MODEL_NAME)
 fitting_properties = {
     "K": 10,
     "weights": 'distance',
-    "labels_train": 'output/processing/custom_labels/msp2/divided_labels_class_core_3000.csv', # can be None
+    "labels_train": 'output/processing/custom_labels/mspp2/divided_labels_class_core_3000.csv', # can be None
     "labels": 'C:\Datasets\MSP-PODCAST-Publish-2.0\Labels\labels_consensus.csv',
     "drop_labels": ('EmoClass', ['X', 'O']), #Can be None
     "train_set": ['Train', 'Development'],
