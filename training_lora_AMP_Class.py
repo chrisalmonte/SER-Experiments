@@ -21,15 +21,15 @@ import cTransforms
 import cModelManagerLRA
 import cNNModules
 
-MODEL_NAME = "WavLM_BP_Class_LoRa"
+MODEL_NAME = "WavLM_BP_Class_LoRa_RVS"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 RESUME_FROM = None
 
 model_description = """
-WavLM BasePlus finetuned using LoRA for Emotion classification on MSP-podcast 2.
+WavLM BasePlus finetuned using LoRA for Emotion classification on Ravdess.
 Features:
  + Statistical pooling as frame pooling.
- + Time shifting, masking and frequency masking.
+ + Time shifting, Gaussian noise addition, masking and frequency masking.
  + 2 Hidden Layers to classification head, with LeakyReLU.
 """
 
@@ -59,30 +59,35 @@ class Loss(Enum):
     avg_loss_val = "Validation avg. loss"
     avg_loss_train = "Training avg. loss"
 
+class Metrics(Enum):
+    unweighted_avg_recall = "Unweighted avg. recall"
+
 #Parameters:
 
-shift_params = {
-    "min": -0.3,
-    "max": 0.3,
-    "unit": "seconds",
-    "prob": 0.5,
+augment_params = {
+    "sft_min": -0.3,
+    "sft_max": 0.3,
+    "sft_unit": "seconds",
+    "sft_prob": 0.5,
+    "snr_min": 10,
+    "snr_max": 25,
+    "snr_prob": 0.5
 }
 
 loader_params = {
     "dataset_dir": "/home/imd-temp/datasets",
-    "dataset_train_labels": '/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_train_u_3000.csv',
-    "dataset_labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
+    "dataset_labels": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_CasN_folds.csv",
     "dataset_target_column": "EmoClass",
     "dataset_file_column": "FileName",
     "dataset_subdir_column": "Directory",
-    "dataset_train_partition": ("Split_Set", ["Train"]),
-    "dataset_dev_partition": ("Split_Set", ["Development"]),
-    "dataset_test_partition": ("Split_Set", ["Test1"]),
-    "batch_size": 2,
+    "dataset_train_partition": ("Fold", [3,4,5,6]),
+    "dataset_dev_partition": ("Fold", [2]),
+    "dataset_test_partition": ("Fold", [1]),
+    "batch_size": 4,
     "batch_size_test": 8,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
-    "data_transform": cTransforms.ShiftSample(**shift_params),
+    "data_transform": cTransforms.ShiftNoiseSample(**augment_params),
     "target_transform": None,
     "pin_memory": True,
     "num_workers": 4,
@@ -117,9 +122,9 @@ if class_params["label_map"]:
 training_params = {
     "epochs": 50,
     "loss_function": nn.CrossEntropyLoss(),
-    "checkpoint_interval": 5,
+    "checkpoint_interval": 1,
     "checkpoint_before_training": False,
-    "criterion_for_best": Loss.avg_loss_val.value,
+    "criterion_for_best": Metrics.unweighted_avg_recall.value,
 }
 
 grad_acumulation_params = {
@@ -163,7 +168,7 @@ if RESUME_FROM:
     log.log_message(f"\n********** Resuming from epoch {RESUME_FROM} ********\n")
     log.log_property("new_target_epochs", target_epochs)
 else:
-    log.log_properties("Shift Augmentation", shift_params, show=False)
+    log.log_properties("Shift Augmentation", augment_params, show=False)
     log.log_properties("Loader", loader_params, show=False)
     log.log_property("Classes ", class_params, show=False)
     log.log_properties("Training", training_params, show=False)
@@ -176,7 +181,7 @@ else:
 # -------------------------- Create data loaders --------------------------
 #Train set
 dataset_train = cAudiotools.ClassSubdirAudioDataset(
-    loader_params["dataset_train_labels"],
+    loader_params["dataset_labels"],
     loader_params["dataset_dir"],
     loader_params["dataset_target_column"],
     transform=loader_params["data_transform"],
@@ -405,6 +410,8 @@ log.log_message(f"Output range: Min={targets.min():.2f}, Max={targets.max():.2f}
 
 
 #---------------------------------- Training ------------------------------------
+from torchmetrics.classification import MulticlassRecall
+
 #Loop definitions
 def train_loop(dataloader, model, loss_fn, optimizer, metrics_dict=None, pinned_memory=False):
     scaler = torch.amp.GradScaler('cuda')
@@ -473,6 +480,7 @@ def train_loop_grad_accumulation(dataloader, model, loss_fn, optimizer, batch_si
 
 
 def validation_loop(dataloader, model, loss_fn, metrics_dict=None, pinned_memory=False):
+    val_uar = MulticlassRecall(num_classes=len(class_params["output_map"]), average='macro').to(device)
     model.eval()
     size = len(dataloader.dataset)
     test_loss = 0
@@ -487,11 +495,13 @@ def validation_loop(dataloader, model, loss_fn, metrics_dict=None, pinned_memory
                 pred = model(inputs, masks)
                 loss = loss_fn(pred, targets)
             test_loss += loss.item() * inputs.size(0)
+            val_uar.update(pred, targets)
 
     test_loss /= size
     if metrics_dict:
         metrics_dict[Loss.avg_loss_val.value] = test_loss
-
+        #Invert UAR since it is minimized
+        metrics_dict[Metrics.unweighted_avg_recall.value] = 1 - val_uar.compute().item()
 
 #Set Model Manager
 model_mngr.set_model(model, optimizer, training_params["criterion_for_best"])
@@ -501,7 +511,11 @@ if RESUME_FROM:
     model_mngr.load_best_metrics(f"{model_mngr.model_directory}/checkpoints/best/training_state.pt")
 else:
     epoch_start = 0
-    epoch_metrics = {Loss.avg_loss_train.value: math.inf, Loss.avg_loss_val.value: math.inf}
+    epoch_metrics = {
+        Loss.avg_loss_train.value: math.inf, 
+        Loss.avg_loss_val.value: math.inf, 
+        Metrics.unweighted_avg_recall.value: math.inf
+        }
     if training_params["checkpoint_before_training"]:
             model_mngr.checkpoint(0, epoch_metrics)
             log.save()
@@ -525,6 +539,9 @@ for epoch in range(epoch_start, total_epochs):
     
     log.log_message("Validation")
     validation_loop(dataset_dev_loader, model, loss_fn, metrics_dict=epoch_metrics, pinned_memory=pinned_memory)
+
+    #re-invert UAR to original scale
+    epoch_metrics[Metrics.unweighted_avg_recall.value] = 1 - epoch_metrics[Metrics.unweighted_avg_recall.value]
 
     log.log_epoch(epoch + 1, epoch_metrics)
     log.save()
@@ -554,7 +571,7 @@ log.plot_epoch_values(save_path=f'{model_mngr.model_directory}/epoch_values_{tot
 
 
 #----------------------------- Evaluation -------------------------------
-from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score, MulticlassPrecision, MulticlassRecall, MulticlassConfusionMatrix
+from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score, MulticlassPrecision, MulticlassConfusionMatrix
 import pandas as pd
 
 #Test loop
@@ -594,7 +611,8 @@ def test_loop(dataloader, model, num_classes, output_map, device, pinned_memory=
             "F1_Score_Macro": f1_macro.compute().item(),
             "Precision_Macro": precision.compute().item(),
             "Recall_Macro": recall.compute().item(),
-            "Confusion_Matrix": f"\n\n{matrix_str}\n"
+            "Confusion_Matrix": matrix,
+            "Confusion_Matrix_Str": f"\n\n{matrix_str}\n"
         }            
         return results
 
