@@ -78,7 +78,7 @@ augment_params = {
 
 dataset_params = {
     "main_dir": "/home/imd-temp/datasets",
-    "labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/labels_consensus.csv",
+    "labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
     "target_column": "EmoClass",
     "drop_classes": ('X', 'O'),
     "filename_column": "FileName",
