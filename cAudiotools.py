@@ -159,6 +159,39 @@ class ClassSubdirAudioDataset(Dataset):
         class_label = torch.tensor(class_label, dtype=torch.long)
         return audio, class_label
     
+class ClassDFSubdirAudioDataset(Dataset):
+    def __init__(self, labels_df, master_dir, class_column_name, transform=None, target_transform=None, 
+                 subdir_column_name=None, name_column_name=None, include_only: tuple=None, map_dict=None):
+        self.labels = labels_df
+        self.class_idx = self.labels.columns.get_loc(class_column_name)
+        self.master_dir = master_dir
+        self.transform = transform
+        self.target_transform = target_transform
+        self.subdir_idx = 0 if subdir_column_name is None else self.labels.columns.get_loc(subdir_column_name)
+        self.name_idx = 1 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
+
+        if include_only:
+            self.labels = self.labels[self.labels[include_only[0]].isin(include_only[1])].reset_index(drop=True)
+
+        if map_dict:
+            col_name = self.labels.columns[self.class_idx]
+            self.labels[col_name] = self.labels[col_name].map(map_dict)
+
+    def __len__(self):
+        return len(self.labels)
+    
+    def __getitem__(self, idx):
+        audio_path = os.path.join(self.master_dir, self.labels.iloc[idx, self.subdir_idx], self.labels.iloc[idx, self.name_idx])
+        audio, sample_rate = Utils.load_as_np(audio_path)
+        class_label = self.labels.iloc[idx, self.class_idx]
+        if self.transform:
+            audio = self.transform(audio)
+        if self.target_transform:
+            class_label = self.target_transform(class_label)
+        audio = torch.from_numpy(audio).float()
+        class_label = torch.tensor(class_label, dtype=torch.long)
+        return audio, class_label
+    
 class ClassSubdirAudioDatasetRS(Dataset):
     def __init__(self, annotations_file, master_dir, class_column_name, transform=None, target_transform=None, 
                  subdir_column_name=None, name_column_name=None, include_only: tuple=None, map_dict=None, target_sample_rate=16000):

@@ -76,4 +76,50 @@ class CCCLoss(nn.Module):
         
         return torch.mean(1.0 - ccc)
     
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0, reduction='mean'):
+        """
+        Focal Loss for multi-class classification.
+        alpha: 1D Tensor of weights for each class (optional).
+        gamma: Focusing parameter to penalize hard-to-classify examples.
+        reduction: 'none', 'mean', or 'sum'.
+        """
+        super().__init__()
+        self.gamma = gamma
+        self.reduction = reduction
+        
+        # Register alpha as a buffer so it automatically moves to the correct device 
+        # (CPU/GPU) along with the model.
+        if alpha is not None:
+            self.register_buffer('alpha', alpha)
+        else:
+            self.alpha = None
+
+    def forward(self, inputs, targets):
+        # inputs shape: (Batch_size, Num_classes)
+        # targets shape: (Batch_size)
+
+        # 1. Compute the standard Cross-Entropy Loss
+        ce_loss = nn.functional.cross_entropy(inputs, targets, reduction='none')
+
+        # 2. Get the probability of the true class (pt)
+        # Since Cross-Entropy is -log(pt), we can get pt by applying exp(-CE)
+        pt = torch.exp(-ce_loss)
+
+        # 3. Compute the Focal Loss modulating factor: (1 - pt)^gamma
+        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+
+        # 4. Apply the alpha weighting if provided
+        if self.alpha is not None:
+            alpha_t = self.alpha[targets]
+            focal_loss = focal_loss * alpha_t
+
+        # 5. Apply reduction
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+    
     

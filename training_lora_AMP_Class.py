@@ -1,11 +1,12 @@
-##----------------------Huggingface login---------------------
+# region ----------------------Huggingface login---------------------
 import sys
 if len(sys.argv) > 1:
     from huggingface_hub import login
     print("Attempting to log to Huggingface Hub.\n")
     login(token=sys.argv[1])
+# endregion
 
-##------------------------Model Properties-----------------------
+# region ------------------------Model Saving-----------------------
 #Imports
 from enum import Enum
 import math
@@ -20,8 +21,9 @@ import cLogger
 import cTransforms
 import cModelManagerLRA
 import cNNModules
+from cUtils import Imbalance
 
-MODEL_NAME = "WavLM_BP_Class_LoRa_RVS"
+MODEL_NAME = "WavLM_BP_Class_LoRa"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 RESUME_FROM = None
 
@@ -31,6 +33,7 @@ Features:
  + Statistical pooling as frame pooling.
  + Time shifting, Gaussian noise addition, masking and frequency masking.
  + 2 Hidden Layers to classification head, with LeakyReLU.
+ + Focal Loss with smoothed inverse frequency for class imbalance.
 """
 
 #Define output paths
@@ -51,10 +54,10 @@ if not RESUME_FROM:
         log.log_property("GPU_device", torch.cuda.get_device_name(0))
     else:
         log.log_property("device", "cpu")
-    
+# endregion   
 
 
-#-------------------------- Define parameters --------------------------
+# region -------------------------- Define parameters --------------------------
 class Loss(Enum):
     avg_loss_val = "Validation avg. loss"
     avg_loss_train = "Training avg. loss"
@@ -62,32 +65,33 @@ class Loss(Enum):
 class Metrics(Enum):
     unweighted_avg_recall = "Unweighted avg. recall"
 
+
 #Parameters:
 
 augment_params = {
     "sft_min": -0.3,
     "sft_max": 0.3,
     "sft_unit": "seconds",
-    "sft_prob": 0.5,
-    "snr_min": 10,
-    "snr_max": 25,
-    "snr_prob": 0.5
+    "sft_prob": 0.8,
 }
 
-loader_params = {
-    "dataset_dir": "/home/imd-temp/datasets",
-    "dataset_labels": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_CasN_folds.csv",
-    "dataset_target_column": "EmoClass",
-    "dataset_file_column": "FileName",
-    "dataset_subdir_column": "Directory",
-    "dataset_train_partition": ("Fold", [3,4,5,6]),
-    "dataset_dev_partition": ("Fold", [2]),
-    "dataset_test_partition": ("Fold", [1]),
+dataset_params = {
+    "main_dir": "/home/imd-temp/datasets",
+    "labels": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_CasN_folds.csv",
+    "target_column": "EmoClass",
+    "filename_column": "FileName",
+    "subdir_column": "Directory",
+    "train_partition": ("Split_Set", ['Train']),
+    "dev_partition": ("Split_Set", ['Development']),
+    "test_partition": ("Split_Set", ['Test1']),
+}
+
+loader_params = {    
     "batch_size": 4,
     "batch_size_test": 8,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
-    "data_transform": cTransforms.ShiftNoiseSample(**augment_params),
+    "data_transform": cTransforms.ShiftSample(**augment_params),
     "target_transform": None,
     "pin_memory": True,
     "num_workers": 4,
@@ -102,7 +106,8 @@ class_params = {
         3: 'Anger',
         4: 'Fear',
         5: 'Disgust',
-        6: 'Surprise'
+        6: 'Surprise',
+        7: 'Contempt',
     },
     #Label map only used to remap strings in dataframes. May be None
     "label_map": {
@@ -112,16 +117,30 @@ class_params = {
         'A': 3, # Anger
         'F': 4, # Fear
         'D': 5, # Disgust
-        'U': 6  # Surprise
+        'U': 6, # Surprise
+        'C': 7  # Contempt
     },
 }
 if class_params["label_map"]:
     if len(class_params["label_map"]) != len(class_params["output_map"]):
         raise ValueError("Mismatch between number of classes and maps.")
+    
+
+df = pd.load_csv(dataset_params["labels"])
+df[dataset_params["target_column"]] = df[dataset_params["target_column"]].map(class_params["label_map"])
+df_test = df[df[dataset_params["test_partition"][0]].isin(dataset_params["test_partition"][1])]
+df_dev = df[df[dataset_params["dev_partition"][0]].isin(dataset_params["dev_partition"][1])]
+df_train = df[df[dataset_params["train_partition"][0]].isin(dataset_params["train_partition"][1])]
+
+class_counts_series = df_train['EmoClass'].value_counts().sort_index()
+counts_array = class_counts_series.values
+#focal_loss_weights = Imbalance.smoothed_inverse_weights(counts_array)
+## Weights for Effective Number (Beta usually 0.9, 0.99, or 0.999)
+focal_loss_weights = Imbalance.effective_number_weights(counts_array, beta=0.999)
 
 training_params = {
     "epochs": 50,
-    "loss_function": nn.CrossEntropyLoss(),
+    "loss_function": cNNModules.FocalLoss(alpha=focal_loss_weights, gamma=2.0),
     "checkpoint_interval": 1,
     "checkpoint_before_training": False,
     "criterion_for_best": Metrics.unweighted_avg_recall.value,
@@ -135,14 +154,14 @@ grad_acumulation_params = {
 wavlm_params = {
     "model_name": "microsoft/wavlm-base-plus",
     "use_spec_augment": True,
-    "mask_time_prob": 0.05,    # 5% of the time steps will be masked
+    "mask_time_prob": 0.1,    # % of the time steps will be masked
     "mask_time_length": 10,    # Each mask will be 10 frames long (approx 0.2 seconds)
-    "mask_feature_prob": 0.05, # 5% of the frequency/feature dimensions will be masked
+    "mask_feature_prob": 0.05, # % of the frequency/feature dimensions will be masked
     "mask_feature_length": 10  # Each mask covers 10 feature channels
 }
 
 optimizer_params = {    
-    "LoRA_learning_rate": 1e-4,
+    "LoRA_learning_rate": 1e-5,
     "LoRA_adam_betas": (0.9, 0.98),
     "LoRA_adam_epsilon": 1e-8,
     "LoRA_weight_decay": 1e-4,
@@ -150,7 +169,7 @@ optimizer_params = {
     "Regressor_adam_betas": (0.9, 0.98),
     "Regressor_adam_epsilon": 1e-8,
     "Regressor_weight_decay": 1e-4,
-    "Pooling_learning_rate": 1e-3,
+    "Pooling_learning_rate": 5e-4,
     "Pooling_adam_betas": (0.9, 0.98),
     "Pooling_adam_epsilon": 1e-8,
     "Pooling_weight_decay": 0,
@@ -169,8 +188,10 @@ if RESUME_FROM:
     log.log_property("new_target_epochs", target_epochs)
 else:
     log.log_properties("Shift Augmentation", augment_params, show=False)
+    log.log_properties("Dataset", dataset_params, show=False)
     log.log_properties("Loader", loader_params, show=False)
-    log.log_property("Classes ", class_params, show=False)
+    log.log_properties("Classes ", class_params, show=False)
+    log.log_property("Focal loss weights", focal_loss_weights.tolist(), show=False)
     log.log_properties("Training", training_params, show=False)
     log.log_properties("Gradient Accumulation", grad_acumulation_params, show=False)
     log.log_properties("WavLM", wavlm_params, show=False)
@@ -180,16 +201,14 @@ else:
 
 # -------------------------- Create data loaders --------------------------
 #Train set
-dataset_train = cAudiotools.ClassSubdirAudioDataset(
-    loader_params["dataset_labels"],
-    loader_params["dataset_dir"],
-    loader_params["dataset_target_column"],
+dataset_train = cAudiotools.ClassDFSubdirAudioDataset(
+    df_train,
+    dataset_params["main_dir"],
+    dataset_params["target_column"],
+    subdir_column_name=dataset_params["subdir_column"],
+    name_column_name=dataset_params["filename_column"],
     transform=loader_params["data_transform"],
     target_transform=loader_params["target_transform"],
-    subdir_column_name=loader_params["dataset_subdir_column"],
-    name_column_name=loader_params["dataset_file_column"],
-    include_only=loader_params["dataset_train_partition"],
-    map_dict=class_params["label_map"]
     )
 dataset_train_loader = DataLoader(
     dataset_train,
@@ -202,16 +221,14 @@ dataset_train_loader = DataLoader(
     )
 
 #Development (validation) set
-dataset_dev = cAudiotools.ClassSubdirAudioDataset(
-    loader_params["dataset_labels"],
-    loader_params["dataset_dir"],
-    loader_params["dataset_target_column"],
+dataset_dev = cAudiotools.ClassDFSubdirAudioDataset(
+    df_dev,
+    dataset_params["main_dir"],
+    dataset_params["target_column"],
+    subdir_column_name=dataset_params["subdir_column"],
+    name_column_name=dataset_params["filename_column"],
     transform=None,
     target_transform=loader_params["target_transform"],
-    subdir_column_name=loader_params["dataset_subdir_column"],
-    name_column_name=loader_params["dataset_file_column"],
-    include_only=loader_params["dataset_dev_partition"],
-    map_dict=class_params["label_map"]
     )
 dataset_dev_loader = DataLoader(
     dataset_dev,
@@ -224,16 +241,14 @@ dataset_dev_loader = DataLoader(
     )
 
 #Test set
-dataset_test = cAudiotools.ClassSubdirAudioDataset(
-    loader_params["dataset_labels"],
-    loader_params["dataset_dir"],
-    loader_params["dataset_target_column"],
+dataset_test = cAudiotools.ClassDFSubdirAudioDataset(
+    df_test,
+    dataset_params["main_dir"],
+    dataset_params["target_column"],
+    subdir_column_name=dataset_params["subdir_column"],
+    name_column_name=dataset_params["filename_column"],
     transform=None,
     target_transform=loader_params["target_transform"],
-    subdir_column_name=loader_params["dataset_subdir_column"],
-    name_column_name=loader_params["dataset_file_column"],
-    include_only=loader_params["dataset_test_partition"],
-    map_dict=class_params["label_map"]
     )
 dataset_test_loader = DataLoader(
     dataset_test,
