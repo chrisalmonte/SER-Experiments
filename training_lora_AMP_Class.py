@@ -69,10 +69,10 @@ class Metrics(Enum):
 #Parameters:
 
 augment_params = {
-    "sft_min": -0.3,
-    "sft_max": 0.3,
-    "sft_unit": "seconds",
-    "sft_prob": 0.8,
+    "min": -0.3,
+    "max": 0.3,
+    "unit": "seconds",
+    "prob": 0.8,
 }
 
 dataset_params = {
