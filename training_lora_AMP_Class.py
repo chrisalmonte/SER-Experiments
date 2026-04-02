@@ -89,8 +89,8 @@ dataset_params = {
 }
 
 loader_params = {    
-    "batch_size": 4,
-    "batch_size_test": 8,
+    "batch_size": 2,
+    "batch_size_test": 4,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
     "data_transform": cTransforms.ShiftSample(**augment_params),
@@ -128,14 +128,14 @@ if class_params["label_map"]:
         raise ValueError("Mismatch between number of classes and maps.")    
 
 df = pd.read_csv(dataset_params["labels"])
-df[dataset_params["target_column"]] = df[dataset_params["target_column"]].map(class_params["label_map"])
 if dataset_params["drop_classes"]:
     df = df[~df[dataset_params["target_column"]].isin(dataset_params["drop_classes"])]
+df[dataset_params["target_column"]] = df[dataset_params["target_column"]].map(class_params["label_map"])
 df_test = df[df[dataset_params["test_partition"][0]].isin(dataset_params["test_partition"][1])]
 df_dev = df[df[dataset_params["dev_partition"][0]].isin(dataset_params["dev_partition"][1])]
 df_train = df[df[dataset_params["train_partition"][0]].isin(dataset_params["train_partition"][1])]
 
-class_counts_series = df_train['EmoClass'].value_counts().sort_index()
+class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
 counts_array = class_counts_series.values
 #focal_loss_weights = Imbalance.smoothed_inverse_weights(counts_array)
 ## Weights for Effective Number (Beta usually 0.9, 0.99, or 0.999)
