@@ -13,32 +13,31 @@ from cModelManagerLRA import ModelManager
 import cNNModules
 from enum import Enum
 
-LOG_PATH = 'output/models/WavLM_BP_VAD_LoRa_Gender/run_2026_03_26-032822/WavLM_BP_VAD_LoRa_Gender_2026_03_27-020740.pkl'
-TEST_NAME = 'TEST'
-LOAD_CHECKPOINT = 100
-model_manager = ModelManager('output/models/WavLM_BP_VAD_LoRa_Gender/run_2026_03_26-032822', new_run=False)
+TEST_NAME = 'ClassRVS_over_MSP2'
+model_manager = ModelManager('output\models\WavLM_BP_Class_LoRa_RVS\Desp_I\F5', new_run=False)
+LOAD_CHECKPOINT = 'best'
+APPEND_RESULTS_TO_LOG = 'output\models\WavLM_BP_Class_LoRa_RVS\Desp_I\F5\Extra_Tests.pkl'
 
-if LOG_PATH:
-    with open(LOG_PATH, 'rb') as file:
+if APPEND_RESULTS_TO_LOG:
+    with open(APPEND_RESULTS_TO_LOG, 'rb') as file:
         log = pickle.load(file)
 else:
-    log = cLogger.Log('output/logs')
+    log = cLogger.Log(model_manager.model_directory, prefix=f"TEST_{TEST_NAME}")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Device: ", device.type)
+log.log_message(f"Test {TEST_NAME} Device: {device.type}")
 
 results = None
 model = None
 
 # PASTE MODEL STRUCTURE AND SET MODEL MANAGER
 
-model.to(device)
 model_manager.set_model(model, "", None)
 model_manager.load_checkpoint(f"{model_manager.model_directory}/checkpoints/{LOAD_CHECKPOINT}", for_inference=True)
 
-# PASTE DATSET LOADER AND TEST LOOP. 
+# PASTE DATASET LOADER AND TEST LOOP.
 
-# SAVE RESULTS TO VARIABLE
+# SAVE RESULTS TO results VARIABLE
 
 # Save
 log.log_properties(f"Test_results ({TEST_NAME})", results)
