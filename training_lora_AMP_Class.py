@@ -77,8 +77,9 @@ augment_params = {
 
 dataset_params = {
     "main_dir": "/home/imd-temp/datasets",
-    "labels": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_CasN_folds.csv",
+    "labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/labels_consensus.csv",
     "target_column": "EmoClass",
+    "drop_classes": ('X', 'O'),
     "filename_column": "FileName",
     "subdir_column": "Directory",
     "train_partition": ("Split_Set", ['Train']),
@@ -123,11 +124,12 @@ class_params = {
 }
 if class_params["label_map"]:
     if len(class_params["label_map"]) != len(class_params["output_map"]):
-        raise ValueError("Mismatch between number of classes and maps.")
-    
+        raise ValueError("Mismatch between number of classes and maps.")    
 
-df = pd.load_csv(dataset_params["labels"])
+df = pd.read_csv(dataset_params["labels"])
 df[dataset_params["target_column"]] = df[dataset_params["target_column"]].map(class_params["label_map"])
+if dataset_params["drop_classes"]:
+    df = df[~df[dataset_params["target_column"]].isin(dataset_params["drop_classes"])]
 df_test = df[df[dataset_params["test_partition"][0]].isin(dataset_params["test_partition"][1])]
 df_dev = df[df[dataset_params["dev_partition"][0]].isin(dataset_params["dev_partition"][1])]
 df_train = df[df[dataset_params["train_partition"][0]].isin(dataset_params["train_partition"][1])]
