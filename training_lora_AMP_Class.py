@@ -33,7 +33,7 @@ Features:
  + Statistical pooling as frame pooling.
  + Time shifting, Gaussian noise addition, masking and frequency masking.
  + 2 Hidden Layers to classification head, with LeakyReLU.
- + Focal Loss with smoothed inverse frequency for class imbalance.
+ + Focal Loss with effective number weights for class imbalance.
 """
 
 #Define output paths
