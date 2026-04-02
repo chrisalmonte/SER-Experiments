@@ -5,7 +5,7 @@ import optuna
 import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, f1_score
 
 # Custom modules
 from cLogger import Log
@@ -30,7 +30,7 @@ EMOTION_MAP = {
 }
 
 fitting_properties = {
-    "labels": r'C:\Datasets\MSP-PODCAST-Publish-2.0\Labels\labels_consensus.csv',
+    "labels": '/home/imd-temp/datasets/msp-podcast-2_divided/labels/labels_consensus.csv',
     "drop_labels": ('EmoClass', ['X', 'O']), #Can be None
     "train_set": ['Train', 'Development'],
     "test_set": ['Test1', 'Test2'],
@@ -92,15 +92,14 @@ def xgboost_train(X_train, X_test, y_train, y_test, n_e, l_r, m_d, s, c_b, r_a, 
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-
-    return accuracy
+    macro_f1 = f1_score(y_test, y_pred, average='macro')
+    return macro_f1
 
 
 def objective(trial):
     n_e = trial.suggest_int('n_estimators', 200, 1000)
     l_r = trial.suggest_float('learning_rate', 0.001, 0.2, log=True)
-    m_d = trial.suggest_int('max_depth', 4, 10)
+    m_d = trial.suggest_int('max_depth', 4, 12)
     s = trial.suggest_float('subsample', 0.7, 1.0)
     c_b = trial.suggest_float('colsample_bytree', 0.5, 1.0)
     r_a = trial.suggest_float('reg_alpha', 0, 2)
@@ -114,9 +113,9 @@ def objective(trial):
 
 # Create study and optimize
 log.log_message("Starting hyperparameter optimization with Optuna...")
-sampler = optuna.samplers.TPESampler(n_startup_trials=20, seed=999)
+sampler = optuna.samplers.TPESampler(n_startup_trials=150, seed=999)
 study = optuna.create_study(sampler=sampler, direction="maximize")
-study.optimize(objective, n_trials=200)
+study.optimize(objective, n_trials=1500)
 log.log_property("Best Parameters", study.best_params)
 log.log_property("Best Macro F1", f"{study.best_value}")
 
@@ -130,7 +129,7 @@ final_xgb = xgb.XGBClassifier(**winning_params)
 final_xgb.fit(X_train, y_train)
 y_pred = final_xgb.predict(X_test)
 
-log.log_property("\nFinal Accuracy", f"{accuracy_score(y_test, y_pred):.4f}")
+log.log_property("Final Macro F1", f"{f1_score(y_test, y_pred, average='macro'):.4f}")
 log.log_message(":\n")
 log.log_property("Champion Classification Report", classification_report(y_test, y_pred))
 
