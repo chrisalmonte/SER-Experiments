@@ -89,8 +89,8 @@ dataset_params = {
 }
 
 loader_params = {    
-    "batch_size": 2,
-    "batch_size_test": 4,
+    "batch_size": 4,
+    "batch_size_test": 6,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
     "data_transform": cTransforms.ShiftSample(**augment_params),
@@ -131,7 +131,6 @@ df = pd.read_csv(dataset_params["labels"])
 if dataset_params["drop_classes"]:
     df = df[~df[dataset_params["target_column"]].isin(dataset_params["drop_classes"])]
 df[dataset_params["target_column"]] = df[dataset_params["target_column"]].map(class_params["label_map"])
-df[dataset_params["target_column"]] = df[dataset_params["target_column"]].astype(int)
 df_test = df[df[dataset_params["test_partition"][0]].isin(dataset_params["test_partition"][1])]
 df_dev = df[df[dataset_params["dev_partition"][0]].isin(dataset_params["dev_partition"][1])]
 df_train = df[df[dataset_params["train_partition"][0]].isin(dataset_params["train_partition"][1])]
@@ -375,7 +374,7 @@ class NeuralNetwork(nn.Module):
         return logits
 
 model = NeuralNetwork(wavlm_backbone).to(device)
-loss_fn = training_params["loss_function"]
+loss_fn = training_params["loss_function"].to(device)
 
 optimizer = torch.optim.AdamW([
     # LoRA for WavLM
