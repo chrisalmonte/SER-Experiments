@@ -1,4 +1,4 @@
-# region ----------------------Huggingface login---------------------
+# region ---------------------- Huggingface login---------------------
 import sys
 if len(sys.argv) > 1:
     from huggingface_hub import login
@@ -6,7 +6,7 @@ if len(sys.argv) > 1:
     login(token=sys.argv[1])
 # endregion
 
-# region ------------------------Model Saving-----------------------
+# region ---------------------- Model Saving-----------------------
 #Imports
 from enum import Enum
 import math
@@ -29,10 +29,10 @@ MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 RESUME_FROM = None
 
 model_description = """
-WavLM BasePlus finetuned using LoRA for Emotion classification on Ravdess.
+WavLM BasePlus finetuned using LoRA for Emotion classification on MSP-podcast.
 Features:
  + Statistical pooling as frame pooling.
- + Time shifting, Gaussian noise addition, masking and frequency masking.
+ + Time shifting, masking and frequency masking.
  + 2 Hidden Layers to classification head, with LeakyReLU.
  + Focal Loss with effective number weights for class imbalance.
 """
@@ -57,15 +57,13 @@ if not RESUME_FROM:
         log.log_property("device", "cpu")
 # endregion   
 
-
-# region -------------------------- Define parameters --------------------------
+# region ---------------------- Define parameters --------------------------
 class Loss(Enum):
     avg_loss_val = "Validation avg. loss"
     avg_loss_train = "Training avg. loss"
 
 class Metrics(Enum):
     unweighted_avg_recall = "Unweighted avg. recall"
-
 
 #Parameters:
 
@@ -108,7 +106,7 @@ dataframe_params = {
     "labels_dev_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
     "labels_test_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
     "drop_labels": ("EmoClass", ['X', 'O']),
-    "map_labels": class_params["label_map"],
+    "map_labels": ("EmoClass", class_params["label_map"]),
     "train_partition": [('Split_Set', ['Train'])],
     "test_partition": [('Split_Set', ['Test1'])],
     "dev_partition": [('Split_Set', ['Development'])],
@@ -133,17 +131,22 @@ loader_params = {
     "persistent_workers": True,
 }
 
+focal_loss_parameters = {
+    "gamma": 2.0,
+    "Effective Number Beta": 0.9999,
+}
+
 df_train, df_dev, df_test = DataFrames.make_train_dev_test(**dataframe_params)
 
 class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
 counts_array = class_counts_series.values
 focal_loss_weights = Imbalance.smoothed_inverse_weights(counts_array)
 ## Weights for Effective Number (Beta usually 0.9, 0.99, or 0.999)
-#focal_loss_weights = Imbalance.effective_number_weights(counts_array, beta=0.999)
+#focal_loss_weights = Imbalance.effective_number_weights(counts_array, beta=focal_loss_parameters["Effective Number Beta"])
 
 training_params = {
     "epochs": 50,
-    "loss_function": cNNModules.FocalLoss(alpha=focal_loss_weights, gamma=2.0),
+    "loss_function": cNNModules.FocalLoss(alpha=focal_loss_weights, gamma=focal_loss_parameters["gamma"]),
     "checkpoint_interval": 1,
     "checkpoint_before_training": False,
     "criterion_for_best": Metrics.unweighted_avg_recall.value,
@@ -192,18 +195,20 @@ if RESUME_FROM:
     log.log_property("new_target_epochs", target_epochs)
 else:
     log.log_properties("Shift Augmentation", augment_params, show=False)
+    log.log_properties("Classes ", class_params, show=False)
+    log.log_properties("Dataframe Structure", dataframe_params, show=False)
     log.log_properties("Dataset", dataset_params, show=False)
     log.log_properties("Loader", loader_params, show=False)
-    log.log_properties("Classes ", class_params, show=False)
     log.log_property("Focal loss weights", focal_loss_weights.tolist(), show=False)
+    log.log_properties("Focal Loss Parameters", focal_loss_parameters, show=False)
     log.log_properties("Training", training_params, show=False)
     log.log_properties("Gradient Accumulation", grad_acumulation_params, show=False)
     log.log_properties("WavLM", wavlm_params, show=False)
     log.log_properties("Optimizer Parameters", optimizer_params, show=False)
     log.log_properties("Scheduler Parameters", scheduler_params, show=False)
+# endregion
 
-
-# -------------------------- Create data loaders --------------------------
+# region ---------------------- Create data loaders --------------------------
 #Train set
 dataset_train = cAudiotools.ClassDFSubdirAudioDataset(
     df_train,
@@ -263,8 +268,9 @@ dataset_test_loader = DataLoader(
     num_workers=loader_params["num_workers"],
     persistent_workers=loader_params["persistent_workers"],
     )
+# endregion
 
-# --------------------------- Define model -------------------------------
+# region ---------------------- Define model -------------------------------
 from transformers import WavLMModel, WavLMConfig
 from peft import LoraConfig, get_peft_model
 
@@ -426,9 +432,9 @@ log.log_message(f"Targets Shape: {targets.shape}")
 log.log_message(f"Masks Shape: {masks.shape}")
 log.log_message(f"Input range: Min={inputs.min():.2f}, Max={inputs.max():.2f}")
 log.log_message(f"Output range: Min={targets.min():.2f}, Max={targets.max():.2f}")
+# endregion
 
-
-#---------------------------------- Training ------------------------------------
+# region ---------------------- Training ------------------------------------
 from torchmetrics.classification import MulticlassRecall
 
 #Loop definitions
@@ -583,9 +589,9 @@ log.log_properties(f"Last_epoch ({total_epochs})", epoch_metrics)
 log.log_properties("Best_model", model_mngr.best_model_metrics | {"epoch": model_mngr.best_model_epoch})
 log.save()
 log.plot_epoch_values(save_path=f'{model_mngr.model_directory}/epoch_values_{total_epochs}.png')
+# endregion
 
-
-#----------------------------- Evaluation -------------------------------
+# region ---------------------- Evaluation -------------------------------
 from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score, MulticlassPrecision, MulticlassConfusionMatrix
 import pandas as pd
 
@@ -642,3 +648,4 @@ for mode in ["Final", "Best"]:
     
 log.save()
 log.save_txt()
+# endregion
