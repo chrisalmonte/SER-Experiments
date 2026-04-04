@@ -21,11 +21,12 @@ class ModelManager:
         self.best_model_metrics = {}
         self.best_model_epoch = -1
     
-    def set_model(self, model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion_key: str, scheduler = None):
+    def set_model(self, model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion_key: str, scheduler = None, best='min'):
         self.model = model
         self.optimizer = optimizer
         self.loss_property_key = criterion_key
         self.scheduler = scheduler
+        self.minimize = best == 'min'
 
     def checkpoint(self, epoch: int, metrics, custom_name: str = None):
         dir_name = custom_name if custom_name else f"epoch_{epoch}"
@@ -59,10 +60,10 @@ class ModelManager:
         if self.loss_property_key not in metrics:
             raise KeyError(f"The specified loss property key '{self.loss_property_key}' is not in the metrics.")
         
-        best = self.best_model_metrics.get(self.loss_property_key, math.inf)
+        best = self.best_model_metrics.get(self.loss_property_key, math.inf if self.minimize else -math.inf)
         current = metrics[self.loss_property_key]
         
-        if current < best:            
+        if (current < best and self.minimize) or (current > best and not self.minimize):            
             self.best_model_epoch = epoch
             self.best_model_metrics = deepcopy(metrics)
             print(f"New best model at epoch: {epoch}")

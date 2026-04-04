@@ -137,9 +137,9 @@ df_train = df[df[dataset_params["train_partition"][0]].isin(dataset_params["trai
 
 class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
 counts_array = class_counts_series.values
-#focal_loss_weights = Imbalance.smoothed_inverse_weights(counts_array)
+focal_loss_weights = Imbalance.smoothed_inverse_weights(counts_array)
 ## Weights for Effective Number (Beta usually 0.9, 0.99, or 0.999)
-focal_loss_weights = Imbalance.effective_number_weights(counts_array, beta=0.999)
+#focal_loss_weights = Imbalance.effective_number_weights(counts_array, beta=0.999)
 
 training_params = {
     "epochs": 50,
@@ -147,6 +147,7 @@ training_params = {
     "checkpoint_interval": 1,
     "checkpoint_before_training": False,
     "criterion_for_best": Metrics.unweighted_avg_recall.value,
+    "criterion_mode": "max",
 }
 
 grad_acumulation_params = {
@@ -519,10 +520,10 @@ def validation_loop(dataloader, model, loss_fn, metrics_dict=None, pinned_memory
     if metrics_dict:
         metrics_dict[Loss.avg_loss_val.value] = test_loss
         #Invert UAR since it is minimized
-        metrics_dict[Metrics.unweighted_avg_recall.value] = 1 - val_uar.compute().item()
+        metrics_dict[Metrics.unweighted_avg_recall.value] = val_uar.compute().item()
 
 #Set Model Manager
-model_mngr.set_model(model, optimizer, training_params["criterion_for_best"])
+model_mngr.set_model(model, optimizer, training_params["criterion_for_best"], best=training_params["criterion_mode"])
 
 if RESUME_FROM:
     epoch_start, epoch_metrics = model_mngr.load_checkpoint(f"{model_mngr.model_directory}/checkpoints/epoch_{RESUME_FROM}")
@@ -531,8 +532,7 @@ else:
     epoch_start = 0
     epoch_metrics = {
         Loss.avg_loss_train.value: math.inf, 
-        Loss.avg_loss_val.value: math.inf, 
-        Metrics.unweighted_avg_recall.value: math.inf
+        Loss.avg_loss_val.value: math.inf,
         }
     if training_params["checkpoint_before_training"]:
             model_mngr.checkpoint(0, epoch_metrics)
@@ -557,9 +557,6 @@ for epoch in range(epoch_start, total_epochs):
     
     log.log_message("Validation")
     validation_loop(dataset_dev_loader, model, loss_fn, metrics_dict=epoch_metrics, pinned_memory=pinned_memory)
-
-    #re-invert UAR to original scale
-    epoch_metrics[Metrics.unweighted_avg_recall.value] = 1 - epoch_metrics[Metrics.unweighted_avg_recall.value]
 
     log.log_epoch(epoch + 1, epoch_metrics)
     log.save()
