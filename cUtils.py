@@ -64,3 +64,33 @@ class DataFrames:
                 df_test = df_test[df_test[partition[0]].isin(partition[1])]
 
         return (df_train, df_test)
+    
+    @staticmethod
+    def make_train_dev_test(labels_train_path, labels_test_path=None, labels_dev_path=None, drop_labels=None, map_labels=None, 
+                        train_partition=None, test_partition=None, dev_partition=None):
+        labels_test_path = labels_test_path if labels_test_path else labels_train_path
+        labels_dev_path = labels_dev_path if labels_dev_path else labels_train_path
+
+        df_train = pd.read_csv(labels_train_path)
+        df_test = pd.read_csv(labels_test_path)
+        df_dev = pd.read_csv(labels_dev_path)
+
+        if drop_labels:
+            df_train = df_train[~df_train[drop_labels[0]].isin(drop_labels[1])]
+            df_test = df_test[~df_test[drop_labels[0]].isin(drop_labels[1])]
+            df_dev = df_dev[~df_dev[drop_labels[0]].isin(drop_labels[1])]
+        if map_labels:
+            df_train[map_labels[0]] = df_train[map_labels[0]].map(map_labels[1])
+            df_test[map_labels[0]] = df_test[map_labels[0]].map(map_labels[1])
+            df_dev[map_labels[0]] = df_dev[map_labels[0]].map(map_labels[1])
+        if train_partition:
+            for partition in train_partition:
+                df_train = df_train[df_train[partition[0]].isin(partition[1])]
+        if test_partition:
+            for partition in test_partition:
+                df_test = df_test[df_test[partition[0]].isin(partition[1])]
+        if dev_partition:
+            for partition in dev_partition:
+                df_dev = df_dev[df_dev[partition[0]].isin(partition[1])]
+
+        return (df_train, df_dev, df_test)

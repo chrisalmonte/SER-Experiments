@@ -22,7 +22,7 @@ import cLogger
 import cTransforms
 import cModelManagerLRA
 import cNNModules
-from cUtils import Imbalance
+from cUtils import Imbalance, DataFrames
 
 MODEL_NAME = "WavLM_BP_Class_LoRa"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
@@ -76,30 +76,6 @@ augment_params = {
     "prob": 0.8,
 }
 
-dataset_params = {
-    "main_dir": "/home/imd-temp/datasets",
-    "labels": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
-    "target_column": "EmoClass",
-    "drop_classes": ('X', 'O'),
-    "filename_column": "FileName",
-    "subdir_column": "Directory",
-    "train_partition": ("Split_Set", ['Train']),
-    "dev_partition": ("Split_Set", ['Development']),
-    "test_partition": ("Split_Set", ['Test1']),
-}
-
-loader_params = {    
-    "batch_size": 4,
-    "batch_size_test": 6,
-    "shuffle_train": True,
-    "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
-    "data_transform": cTransforms.ShiftSample(**augment_params),
-    "target_transform": None,
-    "pin_memory": True,
-    "num_workers": 4,
-    "persistent_workers": True,
-}
-
 class_params = {
     "output_map": {
         0: 'Neutral',
@@ -125,15 +101,39 @@ class_params = {
 }
 if class_params["label_map"]:
     if len(class_params["label_map"]) != len(class_params["output_map"]):
-        raise ValueError("Mismatch between number of classes and maps.")    
+        raise ValueError("Mismatch between number of classes and maps.")
 
-df = pd.read_csv(dataset_params["labels"])
-if dataset_params["drop_classes"]:
-    df = df[~df[dataset_params["target_column"]].isin(dataset_params["drop_classes"])]
-df[dataset_params["target_column"]] = df[dataset_params["target_column"]].map(class_params["label_map"])
-df_test = df[df[dataset_params["test_partition"][0]].isin(dataset_params["test_partition"][1])]
-df_dev = df[df[dataset_params["dev_partition"][0]].isin(dataset_params["dev_partition"][1])]
-df_train = df[df[dataset_params["train_partition"][0]].isin(dataset_params["train_partition"][1])]
+dataframe_params = {
+    "labels_train_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_train_u_3000.csv",
+    "labels_dev_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
+    "labels_test_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
+    "drop_labels": ("EmoClass", ['X', 'O']),
+    "map_labels": class_params["label_map"],
+    "train_partition": [('Split_Set', ['Train'])],
+    "test_partition": [('Split_Set', ['Test1'])],
+    "dev_partition": [('Split_Set', ['Development'])],
+}
+
+dataset_params = {
+    "main_dir": "/home/imd-temp/datasets",
+    "target_column": "EmoClass",
+    "filename_column": "FileName",
+    "subdir_column": "Directory",
+}
+
+loader_params = {    
+    "batch_size": 4,
+    "batch_size_test": 6,
+    "shuffle_train": True,
+    "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
+    "data_transform": cTransforms.ShiftSample(**augment_params),
+    "target_transform": None,
+    "pin_memory": True,
+    "num_workers": 4,
+    "persistent_workers": True,
+}
+
+df_train, df_dev, df_test = DataFrames.make_train_dev_test(**dataframe_params)
 
 class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
 counts_array = class_counts_series.values
