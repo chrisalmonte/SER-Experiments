@@ -37,7 +37,7 @@ class LayerWeightedAvgPooling(nn.Module):
     def __init__(self, num_layers):
         super().__init__()
         # Initialize with 1's at the start
-        self.weights = nn.Parameter(torch.ones(num_layers))
+        self.weights = nn.Parameter(torch.zeros(num_layers))
 
     def forward(self, x):
         # x shape: (Batch, Layers, Hidden)

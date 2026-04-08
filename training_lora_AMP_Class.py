@@ -24,15 +24,15 @@ import cModelManagerLRA
 import cNNModules
 from cUtils import Imbalance, DataFrames
 
-MODEL_NAME = "WavLM_BP_Class_LoRa"
+MODEL_NAME = "WavLM_BP_Class_LoRa_Re_RVS"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 RESUME_FROM = None
 
 model_description = """
-WavLM BasePlus finetuned using LoRA for Emotion classification on MSP-podcast.
+WavLM BasePlus finetuned using LoRA for Emotion classification on Ravdess. (FOLD 1)
 Features:
  + Statistical pooling as frame pooling.
- + Time shifting, masking and frequency masking.
+ + Time shifting, Noise addition, masking and frequency masking.
  + 2 Hidden Layers to classification head, with LeakyReLU.
  + Focal Loss with effective number weights for class imbalance.
 """
@@ -68,10 +68,13 @@ class Metrics(Enum):
 #Parameters:
 
 augment_params = {
-    "min": -0.3,
-    "max": 0.3,
-    "unit": "seconds",
-    "prob": 0.8,
+    "sft_min": -0.3,
+    "sft_max": 0.3,
+    "sft_unit": "seconds",
+    "sft_prob": 0.8,
+    "snr_min": 5,
+    "snr_max": 30,
+    "snr_prob": 0.8,
 }
 
 class_params = {
@@ -83,7 +86,7 @@ class_params = {
         4: 'Fear',
         5: 'Disgust',
         6: 'Surprise',
-        7: 'Contempt',
+        #7: 'Calm',
     },
     #Label map only used to remap strings in dataframes. May be None
     "label_map": {
@@ -94,22 +97,16 @@ class_params = {
         'F': 4, # Fear
         'D': 5, # Disgust
         'U': 6, # Surprise
-        'C': 7  # Contempt
+        'Ca':0  # Calm as neutral
     },
 }
-if class_params["label_map"]:
-    if len(class_params["label_map"]) != len(class_params["output_map"]):
-        raise ValueError("Mismatch between number of classes and maps.")
 
 dataframe_params = {
-    "labels_train_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_train_u_3000.csv",
-    "labels_dev_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
-    "labels_test_path": "/home/imd-temp/datasets/msp-podcast-2_divided/labels/divided_labels_consensus.csv",
-    "drop_labels": ("EmoClass", ['X', 'O']),
+    "labels_train_path": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_folds.csv",
     "map_labels": ("EmoClass", class_params["label_map"]),
-    "train_partition": [('Split_Set', ['Train'])],
-    "test_partition": [('Split_Set', ['Test1'])],
-    "dev_partition": [('Split_Set', ['Development'])],
+    "train_partition": [('Fold', [3,4,5,6])],
+    "dev_partition": [('Fold', [2])],
+    "test_partition": [('Fold', [1])],
 }
 
 dataset_params = {
@@ -117,36 +114,53 @@ dataset_params = {
     "target_column": "EmoClass",
     "filename_column": "FileName",
     "subdir_column": "Directory",
+    "resample": True,
+    "target_sample_rate": 16000,
 }
 
 loader_params = {    
-    "batch_size": 4,
-    "batch_size_test": 6,
+    "batch_size": 32,
+    "batch_size_test": 10,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
-    "data_transform": cTransforms.ShiftSample(**augment_params),
+    "data_transform": cTransforms.ShiftNoiseSample(**augment_params),
     "target_transform": None,
     "pin_memory": True,
-    "num_workers": 4,
+    "num_workers": 8,
     "persistent_workers": True,
 }
 
 focal_loss_parameters = {
+    "label_smoothing": 0.1,
+    "use_focal_loss": False,
     "gamma": 2.0,
-    "Effective Number Beta": 0.9999,
+    "Effective Number Beta": 0.99,
 }
 
 df_train, df_dev, df_test = DataFrames.make_train_dev_test(**dataframe_params)
 
 class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
 counts_array = class_counts_series.values
-focal_loss_weights = Imbalance.smoothed_inverse_weights(counts_array)
+#class_weights = Imbalance.smoothed_inverse_weights(counts_array)
 ## Weights for Effective Number (Beta usually 0.9, 0.99, or 0.999)
-#focal_loss_weights = Imbalance.effective_number_weights(counts_array, beta=focal_loss_parameters["Effective Number Beta"])
+#class_weights = Imbalance.effective_number_weights(counts_array, beta=focal_loss_parameters["Effective Number Beta"])
+from sklearn.utils.class_weight import compute_class_weight
+import pandas as pd
+import numpy as np
+master_df = pd.concat([df_train, df_dev, df_test], ignore_index=True)
+train_labels = master_df[dataset_params["target_column"]].values
+
+class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=np.unique(train_labels),  # [0,1,2,3,4,5,6,7]
+    y=train_labels
+)
+#class_weights = torch.tensor(class_weights, dtype=torch.float32)
+class_weights = torch.tensor([0.8, 0.9, 1.1, 1.2, 1.0, 1.0, 2.5])
 
 training_params = {
-    "epochs": 50,
-    "loss_function": cNNModules.FocalLoss(alpha=focal_loss_weights, gamma=focal_loss_parameters["gamma"]),
+    "epochs": 150,
+    "loss_function": nn.CrossEntropyLoss(weight=class_weights, label_smoothing=focal_loss_parameters["label_smoothing"]),
     "checkpoint_interval": 1,
     "checkpoint_before_training": False,
     "criterion_for_best": Metrics.unweighted_avg_recall.value,
@@ -154,7 +168,7 @@ training_params = {
 }
 
 grad_acumulation_params = {
-    "use_grad_accumulation": True,
+    "use_grad_accumulation": False,
     "simulated_batch_size": 32,
 }
 
@@ -172,19 +186,19 @@ optimizer_params = {
     "LoRA_adam_betas": (0.9, 0.98),
     "LoRA_adam_epsilon": 1e-8,
     "LoRA_weight_decay": 1e-4,
-    "Regressor_learning_rate": 1e-3,
+    "Regressor_learning_rate": 1e-4,
     "Regressor_adam_betas": (0.9, 0.98),
     "Regressor_adam_epsilon": 1e-8,
     "Regressor_weight_decay": 1e-4,
-    "Pooling_learning_rate": 5e-4,
+    "Pooling_learning_rate": 1e-4,
     "Pooling_adam_betas": (0.9, 0.98),
     "Pooling_adam_epsilon": 1e-8,
     "Pooling_weight_decay": 0,
 }
 
 scheduler_params = {
-    "use_scheduler": False,
-    "eta_min": 1e-5,
+    "use_scheduler": True,
+    "eta_min": 1e-6,
 }
 
 if RESUME_FROM:
@@ -199,7 +213,7 @@ else:
     log.log_properties("Dataframe Structure", dataframe_params, show=False)
     log.log_properties("Dataset", dataset_params, show=False)
     log.log_properties("Loader", loader_params, show=False)
-    log.log_property("Focal loss weights", focal_loss_weights.tolist(), show=False)
+    log.log_property("Focal loss weights", class_weights.tolist())
     log.log_properties("Focal Loss Parameters", focal_loss_parameters, show=False)
     log.log_properties("Training", training_params, show=False)
     log.log_properties("Gradient Accumulation", grad_acumulation_params, show=False)
@@ -218,6 +232,8 @@ dataset_train = cAudiotools.ClassDFSubdirAudioDataset(
     name_column_name=dataset_params["filename_column"],
     transform=loader_params["data_transform"],
     target_transform=loader_params["target_transform"],
+    resample=dataset_params["resample"],
+    target_sample_rate=dataset_params["target_sample_rate"],
     )
 dataset_train_loader = DataLoader(
     dataset_train,
@@ -238,6 +254,8 @@ dataset_dev = cAudiotools.ClassDFSubdirAudioDataset(
     name_column_name=dataset_params["filename_column"],
     transform=None,
     target_transform=loader_params["target_transform"],
+    resample=dataset_params["resample"],
+    target_sample_rate=dataset_params["target_sample_rate"],
     )
 dataset_dev_loader = DataLoader(
     dataset_dev,
@@ -258,6 +276,8 @@ dataset_test = cAudiotools.ClassDFSubdirAudioDataset(
     name_column_name=dataset_params["filename_column"],
     transform=None,
     target_transform=loader_params["target_transform"],
+    resample=dataset_params["resample"],
+    target_sample_rate=dataset_params["target_sample_rate"],
     )
 dataset_test_loader = DataLoader(
     dataset_test,
@@ -293,7 +313,7 @@ class NeuralNetwork(nn.Module):
         self.hidden_size = self.wavlm.config.hidden_size
 
         lora_config = LoraConfig(
-            r=16,                     # Rank
+            r=8,                     # Rank
             lora_alpha=16,           # Scaling factor
             target_modules=["q_proj", "v_proj"], # Inject LoRA into the Attention layers
             lora_dropout=0.1,        # Dropout specifically for the LoRA weights
@@ -303,21 +323,20 @@ class NeuralNetwork(nn.Module):
         self.wavlm = get_peft_model(self.wavlm, lora_config)
 
         self.regression_head = nn.Sequential(
-            nn.Linear(self.hidden_size*2, 812),
-            nn.LeakyReLU(),
-            nn.Dropout(0.25),
+            nn.Linear(self.hidden_size*2, 512),
+            nn.BatchNorm1d(512),
+            nn.LeakyReLU(0.01),
+            nn.Dropout(0.5),
             
-            nn.Linear(812, 360),
-            nn.LeakyReLU(),
-            nn.Dropout(0.2),
-            
-            nn.Linear(360, 120),
-            nn.LeakyReLU(),
-            
-            nn.Linear(120, len(class_params["output_map"]))
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.LeakyReLU(0.01),
+            nn.Dropout(0.4),
+
+            nn.Linear(256, len(class_params["output_map"]))
         )
 
-        self.encoder_pooling = cNNModules.LayerAutoPooling()
+        self.encoder_pooling = cNNModules.LayerWeightedAvgPooling(self.wavlm.config.num_hidden_layers + 1)
     
     def frame_statistical_pooling(self, features, attention_masks=None):
         #Features shape: (Batch, Layers, Frames, Hidden_Size)
@@ -325,17 +344,24 @@ class NeuralNetwork(nn.Module):
         if attention_masks is not None:
             #-----Mask downsampling------
 
-            # Number of downsampled frames
-            feat_len = features.size(2)            
-            # Add dimensions for interpolation: 
-            # (Batch, Mask Original frames) -> (Batch, 1, Mask Original frames)
-            m = attention_masks.unsqueeze(1).float()
-            # Downsample mask using Nearest Neighbor
-            # (Batch, Mask Original frames) -> (Batch, 1, Mask Downsampled frames)
-            m = nn.functional.interpolate(m, size=feat_len, mode='nearest')
+            # WavLM base+ stride product
+            downsample_factor = 320
+            #Downsample masks to match WavLM outputs
+            mask_downsampled = attention_masks[:, ::downsample_factor]
             # Reshape to broadcast across Layers and Hidden_Size
             # (Batch, 1, Mask Downsampled frames) -> (Batch, 1, Mask Downsampled frames, 1)
-            m = m.unsqueeze(-1).float()
+            m = mask_downsampled.unsqueeze(1).unsqueeze(-1).float()
+
+            # Ensure length matches features (in case of rounding differences)
+            # Features shape: (batch, layers, frames, hidden)
+            feat_len = features.size(2)
+            if m.size(2) != feat_len:
+                # Pad or truncate (rare, but safe)
+                if m.size(2) > feat_len:
+                    m = m[:, :, :feat_len, :]
+                else:
+                    pad = feat_len - m.size(2)
+                    m = torch.nn.functional.pad(m, (0, 0, 0, pad))
 
             #-------Apply Mask------- 
             
@@ -361,9 +387,11 @@ class NeuralNetwork(nn.Module):
             std_pooled = torch.sqrt(var_pooled + 1e-9)
             # (Batch, Pooled Layers, Hidden_Size) for mean and std
         else:
+            # Population mean
             mean_pooled = features.mean(dim=2)
-            std_pooled = features.std(dim=2)
-            # (Batch, Pooled Layers, Hidden_Size) for mean and std
+            # Population variance: E[(X - mean)^2]
+            var_pooled = ((features - mean_pooled.unsqueeze(2)) ** 2).mean(dim=2)
+            std_pooled = torch.sqrt(var_pooled + 1e-9)
 
         # Concatenate mean and std
         # -> (Batch, Pooled Layers, Hidden_Size * 2)            
@@ -375,7 +403,7 @@ class NeuralNetwork(nn.Module):
         # Shape: (Batch, Layers, Time, Hidden)        
         utterance_raw = self.frame_statistical_pooling(hidden_states, attention_masks)
         # Shape: (Batch, Layers, Hidden * 2)
-        utterance_weighted = self.encoder_pooling(utterance_raw, layers_dim=1)
+        utterance_weighted = self.encoder_pooling(utterance_raw)
         # Shape: (Batch, Hidden)
         logits = self.regression_head(utterance_weighted)
         return logits
@@ -413,7 +441,7 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
 )
 
 if not RESUME_FROM:
-    log.log_property("model_structure", str(model))
+    log.log_property("model_structure", str(model), show=False)
 
 
 # --------------------------- Data check -------------------------------

@@ -161,7 +161,8 @@ class ClassSubdirAudioDataset(Dataset):
     
 class ClassDFSubdirAudioDataset(Dataset):
     def __init__(self, labels_df, master_dir, class_column_name, transform=None, target_transform=None, 
-                 subdir_column_name=None, name_column_name=None, include_only: tuple=None, map_dict=None):
+                 subdir_column_name=None, name_column_name=None, include_only: tuple=None, map_dict=None, 
+                 resample=False, target_sample_rate=16000):
         self.labels = labels_df
         self.class_idx = self.labels.columns.get_loc(class_column_name)
         self.master_dir = master_dir
@@ -169,6 +170,8 @@ class ClassDFSubdirAudioDataset(Dataset):
         self.target_transform = target_transform
         self.subdir_idx = 0 if subdir_column_name is None else self.labels.columns.get_loc(subdir_column_name)
         self.name_idx = 1 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
+        self.resample = resample
+        self.target_sr = target_sample_rate
 
         if include_only:
             self.labels = self.labels[self.labels[include_only[0]].isin(include_only[1])].reset_index(drop=True)
@@ -182,7 +185,10 @@ class ClassDFSubdirAudioDataset(Dataset):
     
     def __getitem__(self, idx):
         audio_path = os.path.join(self.master_dir, self.labels.iloc[idx, self.subdir_idx], self.labels.iloc[idx, self.name_idx])
-        audio, sample_rate = Utils.load_as_np(audio_path)
+        if self.resample:
+            audio, sample_rate = Utils.load_resample_as_np(audio_path, self.target_sr)
+        else:
+            audio, sample_rate = Utils.load_as_np(audio_path)
         class_label = self.labels.iloc[idx, self.class_idx]
         if self.transform:
             audio = self.transform(audio)
