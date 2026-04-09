@@ -68,6 +68,8 @@ class ModelManager:
             self.best_model_metrics = deepcopy(metrics)
             print(f"New best model at epoch: {epoch}")
             self.checkpoint(self.best_model_epoch, self.best_model_metrics, custom_name="best")
+            return True
+        return False
 
     def load_checkpoint(self, checkpoint_dir: str, for_inference: bool = False):
         if not os.path.isdir(checkpoint_dir):

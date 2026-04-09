@@ -33,8 +33,6 @@ WavLM BasePlus finetuned using LoRA for Emotion classification on Ravdess. (FOLD
 Features:
  + Statistical pooling as frame pooling.
  + Time shifting, Noise addition, masking and frequency masking.
- + 2 Hidden Layers to classification head, with LeakyReLU.
- + Focal Loss with effective number weights for class imbalance.
 """
 
 #Define output paths
@@ -64,6 +62,13 @@ class Loss(Enum):
 
 class Metrics(Enum):
     unweighted_avg_recall = "Unweighted avg. recall"
+
+class ClassWeighting(Enum):
+    none = 0
+    inverse_frequency = 1
+    smooth_inverse_f = 2
+    effective_number = 3
+    custom = 4
 
 #Parameters:
 
@@ -105,8 +110,8 @@ dataframe_params = {
     "labels_train_path": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_folds.csv",
     "map_labels": ("EmoClass", class_params["label_map"]),
     "train_partition": [('Fold', [3,4,5,6])],
-    "dev_partition": [('Fold', [2])],
-    "test_partition": [('Fold', [1])],
+    "dev_partition": [('Fold', [1])],
+    "test_partition": [('Fold', [2])],
 }
 
 dataset_params = {
@@ -130,41 +135,56 @@ loader_params = {
     "persistent_workers": True,
 }
 
-focal_loss_parameters = {
+class_weighting_params = {
+    "weighting": ClassWeighting.inverse_frequency,
     "label_smoothing": 0.1,
-    "use_focal_loss": False,
     "gamma": 2.0,
-    "Effective Number Beta": 0.99,
+    "effective_number_beta": 0.999,
+    "class_weights": None,
 }
 
 df_train, df_dev, df_test = DataFrames.make_train_dev_test(**dataframe_params)
 
-class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
-counts_array = class_counts_series.values
-#class_weights = Imbalance.smoothed_inverse_weights(counts_array)
-## Weights for Effective Number (Beta usually 0.9, 0.99, or 0.999)
-#class_weights = Imbalance.effective_number_weights(counts_array, beta=focal_loss_parameters["Effective Number Beta"])
-from sklearn.utils.class_weight import compute_class_weight
-import pandas as pd
-import numpy as np
-master_df = pd.concat([df_train, df_dev, df_test], ignore_index=True)
-train_labels = master_df[dataset_params["target_column"]].values
+match class_weighting_params["weighting"]:
+    case ClassWeighting.none:
+        class_weights = None
+        class_weighting_params["class_weights"] = None
+    case ClassWeighting.inverse_frequency:
+        from sklearn.utils.class_weight import compute_class_weight
+        import pandas as pd
+        import numpy as np
+        train_labels = df_train[dataset_params["target_column"]].values
 
-class_weights = compute_class_weight(
-    class_weight='balanced',
-    classes=np.unique(train_labels),  # [0,1,2,3,4,5,6,7]
-    y=train_labels
-)
-#class_weights = torch.tensor(class_weights, dtype=torch.float32)
-class_weights = torch.tensor([0.8, 0.9, 1.1, 1.2, 1.0, 1.0, 2.5])
+        class_weights = compute_class_weight(
+            class_weight='balanced',
+            classes=np.unique(train_labels),
+            y=train_labels
+        )
+        class_weights = torch.tensor(class_weights, dtype=torch.float32)
+        class_weighting_params["class_weights"] = class_weights.tolist()
+    case ClassWeighting.smooth_inverse_f:
+        class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
+        counts_array = class_counts_series.values
+        class_weights = Imbalance.smoothed_inverse_weights(counts_array)
+        class_weighting_params["class_weights"] = class_weights.tolist()
+    case ClassWeighting.effective_number:
+        class_counts_series = df_train[dataset_params["target_column"]].value_counts().sort_index()
+        counts_array = class_counts_series.values
+        class_weights = Imbalance.effective_number_weights(counts_array, beta=class_weighting_params["effective_number_beta"])
+        class_weighting_params["class_weights"] = class_weights.tolist()
+    case ClassWeighting.custom:
+         class_weights = torch.tensor(class_weighting_params["class_weights"], dtype=torch.float32)
+
+#class_weights = torch.tensor([0.8, 0.9, 1.1, 1.2, 1.0, 1.0, 2.5])
 
 training_params = {
     "epochs": 150,
-    "loss_function": nn.CrossEntropyLoss(weight=class_weights, label_smoothing=focal_loss_parameters["label_smoothing"]),
-    "checkpoint_interval": 1,
+    "loss_function": nn.CrossEntropyLoss(weight=class_weights, label_smoothing=class_weighting_params["label_smoothing"]),
+    "checkpoint_interval": 5,
     "checkpoint_before_training": False,
     "criterion_for_best": Metrics.unweighted_avg_recall.value,
     "criterion_mode": "max",
+    "patience": None, #Early stopping. Can be None
 }
 
 grad_acumulation_params = {
@@ -213,8 +233,7 @@ else:
     log.log_properties("Dataframe Structure", dataframe_params, show=False)
     log.log_properties("Dataset", dataset_params, show=False)
     log.log_properties("Loader", loader_params, show=False)
-    log.log_property("Focal loss weights", class_weights.tolist())
-    log.log_properties("Focal Loss Parameters", focal_loss_parameters, show=False)
+    log.log_properties("Class weightings", class_weighting_params, show=False)
     log.log_properties("Training", training_params, show=False)
     log.log_properties("Gradient Accumulation", grad_acumulation_params, show=False)
     log.log_properties("WavLM", wavlm_params, show=False)
@@ -553,7 +572,6 @@ def validation_loop(dataloader, model, loss_fn, metrics_dict=None, pinned_memory
     test_loss /= size
     if metrics_dict:
         metrics_dict[Loss.avg_loss_val.value] = test_loss
-        #Invert UAR since it is minimized
         metrics_dict[Metrics.unweighted_avg_recall.value] = val_uar.compute().item()
 
 #Set Model Manager
@@ -578,6 +596,7 @@ total_epochs = training_params["epochs"]
 pinned_memory = loader_params["pin_memory"]
 
 log.log_message("\n********* Training *********\n")
+patience_counter = 0
 
 for epoch in range(epoch_start, total_epochs):
     log.log_message(f"Epoch {epoch + 1} of {total_epochs}...")
@@ -605,7 +624,16 @@ for epoch in range(epoch_start, total_epochs):
         remaining_for_checkpoint = training_params["checkpoint_interval"]
     
     #Save best model
-    model_mngr.check_best(epoch + 1, epoch_metrics)
+    new_best = model_mngr.check_best(epoch + 1, epoch_metrics)
+
+    if training_params["patience"]:
+        if new_best:
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= training_params["patience"]:
+                log.log_message(f"Early stopping triggered after {patience_counter} epochs without improvement.")
+                break
 
 #Save last checkpoint if not saved at the end of training
 if training_params["epochs"] % training_params["checkpoint_interval"] != 0:
@@ -672,7 +700,7 @@ for mode in ["Final", "Best"]:
         model_mngr.load_checkpoint(f"{model_mngr.model_directory}/checkpoints/best", for_inference=True)    
     log.log_message(f"Evaluating model ({mode})...")
     results = test_loop(dataset_test_loader, model, len(class_params["output_map"]), class_params["output_map"], device, pinned_memory=loader_params["pin_memory"])
-    log.log_properties(f"Test_results ({mode} up to {total_epochs})", results)
+    log.log_properties(f"Test_results ({mode} up to {epoch})", results)
     
 log.save()
 log.save_txt()
