@@ -24,12 +24,12 @@ import cModelManagerLRA
 import cNNModules
 from cUtils import Imbalance, DataFrames
 
-MODEL_NAME = "WavLM_BP_Class_LoRa_Re_CD"
+MODEL_NAME = "WavLM_BP_IntClass_RVS"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 RESUME_FROM = None
 
 model_description = """
-WavLM BasePlus finetuned using LoRA for Emotion classification on Crema-D. (FOLD 5 MOD III)
+WavLM BasePlus finetuned using LoRA for Emotion Intensity classification on Ravdess. (FOLD 3 INT_I)
 Features:
  + Statistical pooling as frame pooling.
  + Time shifting, Noise addition, masking and frequency masking.
@@ -84,39 +84,28 @@ augment_params = {
 
 class_params = {
     "output_map": {
-        0: 'Neutral',
-        1: 'Happiness',
-        2: 'Sadness',
-        3: 'Anger',
-        4: 'Fear',
-        5: 'Disgust',
-        #6: 'Surprise',
-        #7: 'Calm',
+        0: 'Normal',
+        1: 'Strong',
     },
     #Label map only used to remap strings in dataframes. May be None
     "label_map": {
-        'N': 0, # Neutral
-        'H': 1, # Happiness
-        'S': 2, # Sadness
-        'A': 3, # Anger
-        'F': 4, # Fear
-        'D': 5, # Disgust
-        #'U': 6, # Surprise
-        #'Ca':0  # Calm as neutral
+        'normal': 0,
+        'strong': 1,
     },
 }
 
 dataframe_params = {
-    "labels_train_path": "/home/imd-temp/datasets/crema-d/labels/cremad_labels_folds.csv",
-    "map_labels": ("EmoClass", class_params["label_map"]),
-    "train_partition": [('Fold', [2,3,4])],
-    "dev_partition": [('Fold', [1])],
-    "test_partition": [('Fold', [5])],
+    "labels_train_path": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_folds.csv",
+    "map_labels": ("EmoInt", class_params["label_map"]),
+    "drop_labels": ("EmoClass", ['N', 'Ca']),
+    "train_partition": [('Fold', [5,6,1,2])],
+    "dev_partition": [('Fold', [4])],
+    "test_partition": [('Fold', [3])],
 }
 
 dataset_params = {
     "main_dir": "/home/imd-temp/datasets",
-    "target_column": "EmoClass",
+    "target_column": "EmoInt",
     "filename_column": "FileName",
     "subdir_column": "Directory",
     "resample": True,
@@ -136,8 +125,8 @@ loader_params = {
 }
 
 class_weighting_params = {
-    "weighting": ClassWeighting.inverse_frequency,
-    "label_smoothing": 0.15,
+    "weighting": ClassWeighting.none,
+    "label_smoothing": 0.1,
     #"gamma": 2.0,
     #"effective_number_beta": 0.999,
     #"class_weights": [0.9, 1.5, 1.3, 1.0, 1.3, 1.5],
@@ -195,10 +184,10 @@ grad_acumulation_params = {
 wavlm_params = {
     "model_name": "microsoft/wavlm-base-plus",
     "use_spec_augment": True,
-    "mask_time_prob": 0.2,    # % of the time steps will be masked
-    "mask_time_length": 15,    # Each mask will be 10 frames long (approx 0.2 seconds)
-    "mask_feature_prob": 0.1, # % of the frequency/feature dimensions will be masked
-    "mask_feature_length": 15  # Each mask covers 10 feature channels
+    "mask_time_prob": 0.1,    # % of the time steps will be masked
+    "mask_time_length": 10,    # Each mask will be 10 frames long (approx 0.2 seconds)
+    "mask_feature_prob": 0.05, # % of the frequency/feature dimensions will be masked
+    "mask_feature_length": 10  # Each mask covers 10 feature channels
 }
 
 optimizer_params = {    
@@ -332,7 +321,7 @@ class NeuralNetwork(nn.Module):
         self.hidden_size = self.wavlm.config.hidden_size
 
         lora_config = LoraConfig(
-            r=8,                     # Rank
+            r=16,                     # Rank
             lora_alpha=16,           # Scaling factor
             target_modules=["q_proj", "v_proj"], # Inject LoRA into the Attention layers
             lora_dropout=0.1,        # Dropout specifically for the LoRA weights
@@ -345,12 +334,12 @@ class NeuralNetwork(nn.Module):
             nn.Linear(self.hidden_size*2, 512),
             nn.BatchNorm1d(512),
             nn.LeakyReLU(0.01),
-            nn.Dropout(0.5),
+            nn.Dropout(0.4),
             
             nn.Linear(512, 256),
             nn.BatchNorm1d(256),
             nn.LeakyReLU(0.01),
-            nn.Dropout(0.4),
+            nn.Dropout(0.3),
 
             nn.Linear(256, len(class_params["output_map"]))
         )
