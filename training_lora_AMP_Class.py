@@ -24,12 +24,12 @@ import cModelManagerLRA
 import cNNModules
 from cUtils import Imbalance, DataFrames
 
-MODEL_NAME = "WavLM_BP_Class_LoRa_Re_RVS"
+MODEL_NAME = "WavLM_BP_Class_LoRa_Re_CD"
 MODELS_DIR = "/home/imd-temp/projects/SER-Experiments/output/models"
 RESUME_FROM = None
 
 model_description = """
-WavLM BasePlus finetuned using LoRA for Emotion classification on Ravdess. (FOLD 1)
+WavLM BasePlus finetuned using LoRA for Emotion classification on Crema-D. (FOLD 5 MOD III)
 Features:
  + Statistical pooling as frame pooling.
  + Time shifting, Noise addition, masking and frequency masking.
@@ -90,7 +90,7 @@ class_params = {
         3: 'Anger',
         4: 'Fear',
         5: 'Disgust',
-        6: 'Surprise',
+        #6: 'Surprise',
         #7: 'Calm',
     },
     #Label map only used to remap strings in dataframes. May be None
@@ -101,17 +101,17 @@ class_params = {
         'A': 3, # Anger
         'F': 4, # Fear
         'D': 5, # Disgust
-        'U': 6, # Surprise
-        'Ca':0  # Calm as neutral
+        #'U': 6, # Surprise
+        #'Ca':0  # Calm as neutral
     },
 }
 
 dataframe_params = {
-    "labels_train_path": "/home/imd-temp/datasets/ravdess/labels/ravdess_labels_speech_folds.csv",
+    "labels_train_path": "/home/imd-temp/datasets/crema-d/labels/cremad_labels_folds.csv",
     "map_labels": ("EmoClass", class_params["label_map"]),
-    "train_partition": [('Fold', [3,4,5,6])],
+    "train_partition": [('Fold', [2,3,4])],
     "dev_partition": [('Fold', [1])],
-    "test_partition": [('Fold', [2])],
+    "test_partition": [('Fold', [5])],
 }
 
 dataset_params = {
@@ -125,7 +125,7 @@ dataset_params = {
 
 loader_params = {    
     "batch_size": 32,
-    "batch_size_test": 10,
+    "batch_size_test": 32,
     "shuffle_train": True,
     "collate_function": cAudiotools.Collate.waveform_dynamic_wMasks,
     "data_transform": cTransforms.ShiftNoiseSample(**augment_params),
@@ -137,10 +137,11 @@ loader_params = {
 
 class_weighting_params = {
     "weighting": ClassWeighting.inverse_frequency,
-    "label_smoothing": 0.1,
-    "gamma": 2.0,
-    "effective_number_beta": 0.999,
-    "class_weights": None,
+    "label_smoothing": 0.15,
+    #"gamma": 2.0,
+    #"effective_number_beta": 0.999,
+    #"class_weights": [0.9, 1.5, 1.3, 1.0, 1.3, 1.5],
+    #"class_weights": [0.9, 1.1, 2.5, 1.1, 1.1, 2.5],
 }
 
 df_train, df_dev, df_test = DataFrames.make_train_dev_test(**dataframe_params)
@@ -175,11 +176,10 @@ match class_weighting_params["weighting"]:
     case ClassWeighting.custom:
          class_weights = torch.tensor(class_weighting_params["class_weights"], dtype=torch.float32)
 
-#class_weights = torch.tensor([0.8, 0.9, 1.1, 1.2, 1.0, 1.0, 2.5])
-
 training_params = {
-    "epochs": 150,
+    "epochs": 50,
     "loss_function": nn.CrossEntropyLoss(weight=class_weights, label_smoothing=class_weighting_params["label_smoothing"]),
+    #"loss_function": cNNModules.FocalLoss(alpha=class_weights, gamma=class_weighting_params["gamma"]),
     "checkpoint_interval": 5,
     "checkpoint_before_training": False,
     "criterion_for_best": Metrics.unweighted_avg_recall.value,
@@ -189,28 +189,28 @@ training_params = {
 
 grad_acumulation_params = {
     "use_grad_accumulation": False,
-    "simulated_batch_size": 32,
+    "simulated_batch_size": 64,
 }
 
 wavlm_params = {
     "model_name": "microsoft/wavlm-base-plus",
     "use_spec_augment": True,
-    "mask_time_prob": 0.1,    # % of the time steps will be masked
-    "mask_time_length": 10,    # Each mask will be 10 frames long (approx 0.2 seconds)
-    "mask_feature_prob": 0.05, # % of the frequency/feature dimensions will be masked
-    "mask_feature_length": 10  # Each mask covers 10 feature channels
+    "mask_time_prob": 0.2,    # % of the time steps will be masked
+    "mask_time_length": 15,    # Each mask will be 10 frames long (approx 0.2 seconds)
+    "mask_feature_prob": 0.1, # % of the frequency/feature dimensions will be masked
+    "mask_feature_length": 15  # Each mask covers 10 feature channels
 }
 
 optimizer_params = {    
-    "LoRA_learning_rate": 1e-5,
+    "LoRA_learning_rate": 1e-4,
     "LoRA_adam_betas": (0.9, 0.98),
     "LoRA_adam_epsilon": 1e-8,
-    "LoRA_weight_decay": 1e-4,
-    "Regressor_learning_rate": 1e-4,
+    "LoRA_weight_decay": 5e-5,
+    "Regressor_learning_rate": 1e-3,
     "Regressor_adam_betas": (0.9, 0.98),
     "Regressor_adam_epsilon": 1e-8,
     "Regressor_weight_decay": 1e-4,
-    "Pooling_learning_rate": 1e-4,
+    "Pooling_learning_rate": 1e-3,
     "Pooling_adam_betas": (0.9, 0.98),
     "Pooling_adam_epsilon": 1e-8,
     "Pooling_weight_decay": 0,
@@ -355,7 +355,8 @@ class NeuralNetwork(nn.Module):
             nn.Linear(256, len(class_params["output_map"]))
         )
 
-        self.encoder_pooling = cNNModules.LayerWeightedAvgPooling(self.wavlm.config.num_hidden_layers + 1)
+        #self.encoder_pooling = cNNModules.LayerWeightedAvgPooling(self.wavlm.config.num_hidden_layers + 1)
+        self.encoder_pooling = cNNModules.LayerAutoPooling()
     
     def frame_statistical_pooling(self, features, attention_masks=None):
         #Features shape: (Batch, Layers, Frames, Hidden_Size)
@@ -422,7 +423,8 @@ class NeuralNetwork(nn.Module):
         # Shape: (Batch, Layers, Time, Hidden)        
         utterance_raw = self.frame_statistical_pooling(hidden_states, attention_masks)
         # Shape: (Batch, Layers, Hidden * 2)
-        utterance_weighted = self.encoder_pooling(utterance_raw)
+        #utterance_weighted = self.encoder_pooling(utterance_raw)
+        utterance_weighted = self.encoder_pooling(utterance_raw, layers_dim=1)
         # Shape: (Batch, Hidden)
         logits = self.regression_head(utterance_weighted)
         return logits
@@ -700,7 +702,7 @@ for mode in ["Final", "Best"]:
         model_mngr.load_checkpoint(f"{model_mngr.model_directory}/checkpoints/best", for_inference=True)    
     log.log_message(f"Evaluating model ({mode})...")
     results = test_loop(dataset_test_loader, model, len(class_params["output_map"]), class_params["output_map"], device, pinned_memory=loader_params["pin_memory"])
-    log.log_properties(f"Test_results ({mode} up to {epoch})", results)
+    log.log_properties(f"Test_results ({mode} up to {epoch+1})", results)
     
 log.save()
 log.save_txt()
