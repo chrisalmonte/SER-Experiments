@@ -12,8 +12,9 @@ sys.path.insert(1, parent_dir)
 #Custom imports
 from cLogger import Log
 
-MODEL_PATH = "output/models/WavLM_BP_Class_LoRa_RVS/Desp_I"
-TOTAL_EPOCHS = 100
+MODEL_PATH = "output/models/WavLM_BP_IntClass_RVS/Mod_I"
+TOTAL_EPOCHS = 50
+CLASSES = ["Normal", "Strong"]
 
 search_pattern = f"{MODEL_PATH}/F*/*.pkl"
 matching_files = glob.glob(search_pattern)
@@ -106,12 +107,10 @@ for filename in matching_files:
 for fold_idx, fold in enumerate(folds):
     folds_log.log_properties(f"Fold_{fold_idx+1}_Metrics", fold)
 
-classes = ["Neutral", "Happiness", "Sadness", "Anger", "Fear", "Disgust", "Surprise"]
-
-aggregated_metrics_best = aggregate_cross_val_metrics(folds, class_names=classes, target_model="test_results_Best")
+aggregated_metrics_best = aggregate_cross_val_metrics(folds, class_names=CLASSES, target_model="test_results_Best")
 folds_log.log_properties("Aggregated_CV_Metrics_Best", aggregated_metrics_best)
 
-aggregated_metrics_final = aggregate_cross_val_metrics(folds, class_names=classes, target_model="test_results_Final")
+aggregated_metrics_final = aggregate_cross_val_metrics(folds, class_names=CLASSES, target_model="test_results_Final")
 folds_log.log_properties("Aggregated_CV_Metrics_Final", aggregated_metrics_final)
 
 folds_log.save()
