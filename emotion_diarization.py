@@ -22,29 +22,69 @@ ANALYSIS_CONFIG = {
     "type": "hamming",
 }
 
+CLASS_NOMENCLATURE = {
+    "output_map": {
+        0: 'Neutral',
+        1: 'Happiness',
+        2: 'Sadness',
+        3: 'Anger',
+        4: 'Fear',
+        5: 'Disgust',
+        6: 'Surprise'
+    },
+    #Label map only used to remap strings in dataframes. May be None
+    "label_map": {
+        'N': 0, # Neutral
+        'H': 1, # Happiness
+        'S': 2, # Sadness
+        'A': 3, # Anger
+        'F': 4, # Fear
+        'D': 5, # Disgust
+        'U': 6  # Surprise
+    },
+}
+
 CLASS_MODEL = {
     "adapter_path": "output/models/Animacronica/class/lora_adapter",
     "pooling module": cNNModules.LayerWeightedAvgPooling(13),
     "head_path": "output/models/Animacronica/class/training_state.pt",
+    "output_map": {
+        0: 'Neutral',
+        1: 'Happiness',
+        2: 'Sadness',
+        3: 'Anger',
+        4: 'Fear',
+        5: 'Disgust',
+        6: 'Surprise'
+    },
 }
 
 VAD_MODEL = {
     "adapter_path": "output/models/Animacronica/vad/lora_adapter",
     "pooling module": cNNModules.LayerAutoPooling(),
-    "head_path": "output/models/Animacronica/vad/training_state.pt"
+    "head_path": "output/models/Animacronica/vad/training_state.pt",
+    "output_map": {
+        0: 'Valence',
+        1: 'Activation',
+        2: 'Dominance'
+    },
 }
 
 INT_MODEL = {
     "adapter_path": "output/models/Animacronica/intensity/lora_adapter",
     "pooling module": cNNModules.LayerAutoPooling(),
-    "head_path": "output/models/Animacronica/intensity/training_state.pt"
+    "head_path": "output/models/Animacronica/intensity/training_state.pt",
+    "output_map": {
+        0: 'Normal',
+        1: 'Strong',
+    },
 }
 # endregion
 
 class Mode(StrEnum):
-    CLASS = "class"
-    VAD = "vad"
-    INT = "intensity"
+    CLASS = "Emotion Class"
+    VAD = "VAD"
+    INT = "Intensity"
 
 # region Commnand-line argument parsing
 #args = sys.argv[1:]
@@ -207,11 +247,25 @@ mask = mask.unsqueeze(0)
 input = torch.from_numpy(waveform).float()
 input = input.unsqueeze(0)
 
+predictions = []
+
 #Inference
 model.eval()
 with torch.no_grad():
+    atributes = {}
     for task in Mode:
         raw_predictions = model(task, input.to(device), attention_mask=mask.to(device))
-        prediction = raw_predictions.cpu().numpy()
-        print(f"Predictions for {task}: {prediction}")
-    #Diarization logic (placeholder)
+        prediction = raw_predictions.cpu().numpy().squeeze(0)
+        match task:
+            case Mode.CLASS:
+                prediction = CLASS_MODEL["output_map"][prediction.argmax()]
+                atributes[task.value] = prediction
+            case Mode.VAD:
+                for i, value in enumerate(prediction):
+                    atributes[VAD_MODEL['output_map'][i]] = value
+            case Mode.INT:
+                prediction = INT_MODEL["output_map"][prediction.argmax()]
+                atributes[task.value] = prediction
+    print(atributes)
+
+#Diarization logic (placeholder)
