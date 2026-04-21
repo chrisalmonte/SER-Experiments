@@ -1,17 +1,12 @@
 import torch
-import torchaudio
+from audiomentations import Compose, Shift, AddGaussianSNR
 
 class Functions:
     @staticmethod
     def mono(waveform):
         if waveform.size(0) > 1:
             return torch.mean(waveform, dim=0, keepdim=True)
-        return waveform
-
-    @staticmethod
-    def resample(waveform, orig_freq, new_freq):
-        resampler = torchaudio.transforms.Resample(orig_freq=orig_freq, new_freq=new_freq)
-        return resampler(waveform)    
+        return waveform    
 
 class NormalizeMinus(object):
     """
@@ -47,3 +42,27 @@ class AudioPadTrimTo(object):
         else:
             padding = self.max_length - waveform.size(1)
             return torch.nn.functional.pad(waveform, (0, padding))
+
+class ShiftSample(object):
+    def __init__(self, min=-0.25, max=0.25, unit="seconds", prob=0.5, sample_rate=16000):
+        self.sample_rate = sample_rate
+        self.augment = Compose([
+            Shift(min_shift=min, max_shift=max, shift_unit=unit, rollover=False, p=prob),
+        ])
+
+    def __call__(self, waveform_np):
+        augmented_waveform = self.augment(samples=waveform_np, sample_rate=self.sample_rate)
+        return augmented_waveform
+
+class ShiftNoiseSample(object):
+    def __init__(self, sft_min=-0.25, sft_max=0.25, sft_unit="seconds", sft_prob=0.5, sample_rate=16000,
+                 snr_min=10, snr_max=30, snr_prob=0.5):
+        self.sample_rate = sample_rate
+        self.augment = Compose([
+            Shift(min_shift=sft_min, max_shift=sft_max, shift_unit=sft_unit, rollover=False, p=sft_prob),
+            AddGaussianSNR(min_snr_db=snr_min, max_snr_db=snr_max, p=snr_prob)
+        ])
+
+    def __call__(self, waveform_np):
+        augmented_waveform = self.augment(samples=waveform_np, sample_rate=self.sample_rate)
+        return augmented_waveform

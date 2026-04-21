@@ -1,7 +1,8 @@
+from datetime import datetime
+import inspect
+import matplotlib.pyplot as plt
 import os
 import pickle
-import inspect
-from datetime import datetime
 
 class Log:
     def __init__(self, path: str, prefix: str="log_"):
@@ -32,7 +33,7 @@ class Log:
 
     def log_properties(self, set_name:str ,properties: dict, show: bool=True):
         properties_str = '\n'.join([f"{key}: {self.str_property(value)}" for key, value in properties.items()])
-        self.properties[set_name] = properties_str
+        self.properties[set_name] = f'\n\n{properties_str}'
         if show:
             print(f"{set_name}:\n{properties_str}")
 
@@ -78,11 +79,13 @@ class Log:
                 file.write("\n".join(self.timings) + "\n\n")
             if self.epoch_values:
                 file.write("-----Training-----\n\n")
-                for epoch in len(self.epoch_values['epoch']):
-                    file.write(f"Epoch {self.epoch_values['epoch'][epoch]}:\n")
+                for epoch in range(len(self.epoch_values['epoch'])):
+                    file.write(f"Epoch {self.epoch_values['epoch'][epoch]}:\n\n")
                     for property in self.epoch_values.keys():
-                        file.write(f"{property}: {self.epoch_values[property][epoch]}\n")
-                file.write("\n")                        
+                        if property != 'epoch':
+                            file.write(f"{property}: {self.epoch_values[property][epoch]}\n")
+                    file.write("\n\n")
+            print(f"Log saved to {file_path}.")                        
         
     def track_time(self, track: bool, message: str="", show: bool=True):
         if not track:
@@ -105,6 +108,28 @@ class Log:
                 print(log)
             if reset_timer:
                 self.tracked_time_start = datetime.now()
+    
+    def plot_epoch_values(self, properties: list=None, save_path: str=None, title : str="Epochs", xlabel: str="Epoch", ylabel: str="Value"):
+        if not self.epoch_values:
+            raise ValueError("No epoch values logged to plot.")
+        
+        keys_to_plot = properties if properties else [key for key in self.epoch_values.keys() if key != 'epoch']
+        
+        for key in keys_to_plot:
+            if key not in self.epoch_values:
+                print(f"Property '{key}' not found in epoch values. Skipping.")
+                continue
+            plt.plot(self.epoch_values['epoch'], self.epoch_values[key], label=key)
+        
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.legend()
+        plt.grid(True)
+        if save_path:
+            plt.savefig(save_path)
+            print(f"Plot saved to {save_path}")
+        plt.show()        
     
     @staticmethod
     def str_property(property):
