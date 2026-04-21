@@ -18,10 +18,10 @@ AUDIO_PATH = r"C:\Datasets\ravdess\Audio_Speech_Actors_01-24\Actor_01\03-01-07-0
 
 ANALYSIS_CONFIG = {
     #Seconds
-    "window_type": "hann",
-    "window_size": 0.5,
+    "window_type": "hamming",
+    "window_size": 1,
     "stride_size": 0.25,
-    "batch_size": 6,
+    "batch_size": 12,
 }
 
 CLASS_MODEL = {
@@ -245,7 +245,7 @@ window_size = int(ANALYSIS_CONFIG["window_size"] * sample_rate)
 stride_size = int(ANALYSIS_CONFIG["stride_size"] * sample_rate)
 
 if waveform.shape[0] > window_size:
-    window_func = librosa.filters.get_window(ANALYSIS_CONFIG["window_type"], window_size).astype(np.float32)
+    window_func = librosa.filters.get_window(ANALYSIS_CONFIG["window_type"], window_size, fftbins=False).astype(np.float32)
     frames = librosa.util.frame(waveform, frame_length=window_size, hop_length=stride_size)
     windows = frames * window_func[:, np.newaxis]
     windows = list(windows.T)
@@ -277,7 +277,7 @@ with torch.no_grad():
                         predictions[start + chunk][task.value] = chunk_prediction
                     case Mode.VAD:
                         for vad_i, value in enumerate(raw_predictions[chunk]):
-                            predictions[start + chunk][VAD_MODEL['output_map'][vad_i]] = value
+                            predictions[start + chunk][VAD_MODEL['output_map'][vad_i]] = value.item()
                     case Mode.INT:
                         chunk_prediction = INT_MODEL["output_map"][raw_predictions[chunk].argmax()]
                         predictions[start + chunk][task.value] = chunk_prediction
