@@ -3,45 +3,25 @@ import torch.nn as nn
 import audioflux
 #import getopt
 #import sys
-#import librosa
-#import numpy as np
+import librosa
+import numpy as np
 from enum import StrEnum
 from transformers import WavLMModel
 from peft import PeftModel, get_peft_model, set_peft_model_state_dict
 
 # Custom modules
 import cNNModules
-#import cLogger
+import cLogger
 
 # region ------ CONFIG ---------
 AUDIO_PATH = r"C:\Datasets\ravdess\Audio_Speech_Actors_01-24\Actor_01\03-01-07-02-01-01-01.wav"
 
 ANALYSIS_CONFIG = {
-    "window_size": 20,
-    "stride": 10,
-    "type": "hamming",
-}
-
-CLASS_NOMENCLATURE = {
-    "output_map": {
-        0: 'Neutral',
-        1: 'Happiness',
-        2: 'Sadness',
-        3: 'Anger',
-        4: 'Fear',
-        5: 'Disgust',
-        6: 'Surprise'
-    },
-    #Label map only used to remap strings in dataframes. May be None
-    "label_map": {
-        'N': 0, # Neutral
-        'H': 1, # Happiness
-        'S': 2, # Sadness
-        'A': 3, # Anger
-        'F': 4, # Fear
-        'D': 5, # Disgust
-        'U': 6  # Surprise
-    },
+    #Seconds
+    "window_type": "hann",
+    "window_size": 0.5,
+    "stride_size": 0.25,
+    "batch_size": 6,
 }
 
 CLASS_MODEL = {
@@ -233,7 +213,25 @@ model = EmotionAnalysisMT(CLASS_MODEL, VAD_MODEL, INT_MODEL)
 model.to(device)
 # endregion
 
-# Load audio
+# region -----LOAD AUDIO-----
+def batch_waveforms(audio_waveforms):
+        processed_waveforms = []
+        lengths = []
+        for wav in audio_waveforms:
+            wav = torch.from_numpy(wav).float()
+            squeezed_wav = wav.squeeze()
+            processed_waveforms.append(squeezed_wav)
+            lengths.append(squeezed_wav.size(0))
+        batch_inputs = torch.nn.utils.rnn.pad_sequence(processed_waveforms, batch_first=True, padding_value=0.0)
+
+        #Create Masks (Vectorized)
+        max_len = batch_inputs.shape[1]
+        lengths_tensor = torch.tensor(lengths).unsqueeze(1) # Shape: (Batch, 1)
+        range_tensor = torch.arange(max_len).unsqueeze(0)   # Shape: (1, Max_Len)
+        batch_masks = (range_tensor < lengths_tensor).long()
+
+        return batch_inputs, batch_masks
+
 waveform, sample_rate = audioflux.read(AUDIO_PATH)
 print(f"Waveform shape: {waveform.shape}, Sample rate: {sample_rate}")
 
@@ -242,30 +240,49 @@ if sample_rate != 16000:
     waveform = audioflux.resample(waveform, sample_rate, 16000)
     sample_rate = 16000
 
-mask = torch.ones(waveform.shape[0], dtype=torch.bool)
-mask = mask.unsqueeze(0)
-input = torch.from_numpy(waveform).float()
-input = input.unsqueeze(0)
+#Split audio
+window_size = int(ANALYSIS_CONFIG["window_size"] * sample_rate)
+stride_size = int(ANALYSIS_CONFIG["stride_size"] * sample_rate)
 
-predictions = []
+if waveform.shape[0] > window_size:
+    window_func = librosa.filters.get_window(ANALYSIS_CONFIG["window_type"], window_size).astype(np.float32)
+    frames = librosa.util.frame(waveform, frame_length=window_size, hop_length=stride_size)
+    windows = frames * window_func[:, np.newaxis]
+    windows = list(windows.T)
+else:
+    windows = [waveform]
+input, mask = batch_waveforms(windows)
+# endregion
 
-#Inference
+# region -----INFERENCE & DIARIZATION-----
+predictions = [{"chunk_index": i, "keyframe_time": ((i * stride_size) + (window_size // 2)) / sample_rate} for i in range(input.shape[0])]
 model.eval()
+
 with torch.no_grad():
-    atributes = {}
-    for task in Mode:
-        raw_predictions = model(task, input.to(device), attention_mask=mask.to(device))
-        prediction = raw_predictions.cpu().numpy().squeeze(0)
-        match task:
-            case Mode.CLASS:
-                prediction = CLASS_MODEL["output_map"][prediction.argmax()]
-                atributes[task.value] = prediction
-            case Mode.VAD:
-                for i, value in enumerate(prediction):
-                    atributes[VAD_MODEL['output_map'][i]] = value
-            case Mode.INT:
-                prediction = INT_MODEL["output_map"][prediction.argmax()]
-                atributes[task.value] = prediction
-    print(atributes)
+    iterations = len(input) // ANALYSIS_CONFIG["batch_size"] + (1 if len(input) % ANALYSIS_CONFIG["batch_size"] != 0 else 0)
+    for i in range(iterations):
+        start = i*ANALYSIS_CONFIG["batch_size"]
+        end = (i+1)*ANALYSIS_CONFIG["batch_size"]
+        batch_input = input[start:end]
+        batch_mask = mask[start:end]
+
+        for task in Mode:
+            raw_predictions = model(task, batch_input.to(device), attention_mask=batch_mask.to(device))
+            raw_predictions = raw_predictions.cpu().numpy()
+
+            for chunk in range(len(raw_predictions)):
+                match task:
+                    case Mode.CLASS:
+                        chunk_prediction = CLASS_MODEL["output_map"][raw_predictions[chunk].argmax()]
+                        predictions[start + chunk][task.value] = chunk_prediction
+                    case Mode.VAD:
+                        for vad_i, value in enumerate(raw_predictions[chunk]):
+                            predictions[start + chunk][VAD_MODEL['output_map'][vad_i]] = value
+                    case Mode.INT:
+                        chunk_prediction = INT_MODEL["output_map"][raw_predictions[chunk].argmax()]
+                        predictions[start + chunk][task.value] = chunk_prediction
+
+for pred in predictions:
+    print(pred)
 
 #Diarization logic (placeholder)
