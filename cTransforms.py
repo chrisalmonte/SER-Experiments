@@ -1,5 +1,6 @@
 import torch
 from audiomentations import Compose, Shift, AddGaussianSNR
+from silero_vad import load_silero_vad, get_speech_timestamps
 
 class Functions:
     @staticmethod
@@ -64,5 +65,25 @@ class ShiftNoiseSample(object):
         ])
 
     def __call__(self, waveform_np):
+        augmented_waveform = self.augment(samples=waveform_np, sample_rate=self.sample_rate)
+        return augmented_waveform
+    
+class TrimShiftNoiseSample(object):
+    def __init__(self, sft_min=-0.25, sft_max=0.25, sft_unit="seconds", sft_prob=0.5, sample_rate=16000,
+                 snr_min=10, snr_max=30, snr_prob=0.5, trim_trail=0.1):
+        self.vad_model = load_silero_vad()
+        self.trim_trail_samples = int(trim_trail * sample_rate)
+        self.sample_rate = sample_rate
+        self.augment = Compose([
+            Shift(min_shift=sft_min, max_shift=sft_max, shift_unit=sft_unit, rollover=False, p=sft_prob),
+            AddGaussianSNR(min_snr_db=snr_min, max_snr_db=snr_max, p=snr_prob)
+        ])
+
+    def __call__(self, waveform_np):
+        speech_timestamps = get_speech_timestamps(waveform_np, self.vad_model, return_seconds=False)
+        if speech_timestamps is not None and len(speech_timestamps) > 0:
+            start = max(0, speech_timestamps[0]['start'] - self.trim_trail_samples)
+            end = min(len(waveform_np), speech_timestamps[-1]['end'] + self.trim_trail_samples)
+            waveform_np = waveform_np[start:end]
         augmented_waveform = self.augment(samples=waveform_np, sample_rate=self.sample_rate)
         return augmented_waveform

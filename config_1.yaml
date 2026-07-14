@@ -1,0 +1,68 @@
+name: "Lora_Pool_MLP_Class"
+seed: 999
+
+dataset:
+  labels: ""
+  drectory: ""
+
+loader:
+  batch_size: 4
+  shuffle: true
+
+training:
+  epochs: 50
+  loss_function: "CrossEntropyLoss"
+  criterion_for_best: "unweighted_avg_recall"
+  criterion_mode: "max"
+  patience: null
+
+data_augmentation:
+  shift_min: -0.1
+  shift_max: 0.1
+  shift_unit: "seconds"
+  shift_prob: 0.8
+  snr_min: 5
+  snr_max: 25
+  snr_prob: 0.8
+  trim_trail: 0.1
+
+spec_augment:
+  use: true
+  mask_time_prob: 0.1
+  mask_time_length: 15
+  mask_feature_prob: 0.1
+  mask_feature_length: 10
+
+class_weights:
+  type: "inverse_frequency"
+  label_smoothing: 0.15
+
+lora_optimizer:
+  learning_rate: 1e-5
+  adam_betas: [0.9, 0.98]
+  adam_epsilon: 1e-8
+  weight_decay: 5e-5
+
+regressor_optimizer:
+  learning_rate: 1e-4
+  adam_betas: [0.9, 0.98]
+  adam_epsilon: 1e-8
+  weight_decay: 1e-4
+
+pooling_optimizer:
+  learning_rate: 1e-3
+  adam_betas: [0.9, 0.98]
+  adam_epsilon: 1e-8
+  weight_decay: 0
+
+grad_accumulation:
+  use_grad_accumulation: true
+  simulated_batch_size: 32
+
+scheduler:
+  use: false
+  eta_min: 1e-6
+
+encoder: 
+  model: "microsoft/wavlm-base-plus"
+  lora_rank: 8

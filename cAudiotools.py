@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
+from silero_vad import load_silero_vad, read_audio, get_speech_timestamps
 
 class AudioDatasetCategory(Dataset):
     def __init__(self, annotations_file, audio_dir, transform=None, target_transform=None):
@@ -198,9 +199,51 @@ class ClassDFSubdirAudioDataset(Dataset):
         class_label = torch.tensor(class_label, dtype=torch.long)
         return audio, class_label
     
+class ClassDFSubdirAudioDatasetVoiceAct(Dataset):
+    def __init__(self, labels_df, master_dir, class_column_name, transform=None, target_transform=None, 
+                 subdir_column_name=None, name_column_name=None, include_only: tuple=None, map_dict=None, 
+                 resample=False, target_sample_rate=16000):
+        self.labels = labels_df
+        self.class_idx = self.labels.columns.get_loc(class_column_name)
+        self.master_dir = master_dir
+        self.transform = transform
+        self.target_transform = target_transform
+        self.subdir_idx = 0 if subdir_column_name is None else self.labels.columns.get_loc(subdir_column_name)
+        self.name_idx = 1 if name_column_name is None else self.labels.columns.get_loc(name_column_name)
+        self.resample = resample
+        self.target_sr = target_sample_rate
+        self.vad_model = load_silero_vad()
+
+        if include_only:
+            self.labels = self.labels[self.labels[include_only[0]].isin(include_only[1])].reset_index(drop=True)
+
+        if map_dict:
+            col_name = self.labels.columns[self.class_idx]
+            self.labels[col_name] = self.labels[col_name].map(map_dict)
+
+    def __len__(self):
+        return len(self.labels)
+    
+    def __getitem__(self, idx):
+        audio_path = os.path.join(self.master_dir, self.labels.iloc[idx, self.subdir_idx], self.labels.iloc[idx, self.name_idx])
+        if self.resample:
+            audio, sample_rate = Utils.load_resample_as_np(audio_path, self.target_sr)
+        else:
+            audio, sample_rate = Utils.load_as_np(audio_path)
+        class_label = self.labels.iloc[idx, self.class_idx]
+        if self.transform:
+            audio = self.transform(audio)
+        if self.target_transform:
+            class_label = self.target_transform(class_label)
+        speech_timestamps = get_speech_timestamps(audio, self.vad_model, return_seconds=False)
+        audio = torch.from_numpy(audio).float()
+        class_label = torch.tensor(class_label, dtype=torch.long)
+        return audio, speech_timestamps, class_label
+    
 class ClassSubdirAudioDatasetRS(Dataset):
     def __init__(self, annotations_file, master_dir, class_column_name, transform=None, target_transform=None, 
-                 subdir_column_name=None, name_column_name=None, include_only: tuple=None, map_dict=None, target_sample_rate=16000):
+                 subdir_column_name=None, name_column_name=None, include_only: tuple=None, map_dict=None, 
+                 target_sample_rate=16000):
         self.labels = pd.read_csv(annotations_file)
         self.class_idx = self.labels.columns.get_loc(class_column_name)
         self.master_dir = master_dir
@@ -453,4 +496,5 @@ class Utils:
         if sample_rate != target_sample_rate:
             audio = audioflux.resample(audio, sample_rate, target_sample_rate)
         return (audio, target_sample_rate)
+    
     
