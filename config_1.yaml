@@ -1,5 +1,4 @@
 name: "Lora_Pool_MLP_Class"
-backbone: "microsoft/wavlm-base-plus"
 seed: 999
 
 dataset:
@@ -63,3 +62,7 @@ grad_accumulation:
 scheduler:
   use: false
   eta_min: 1e-6
+
+encoder: 
+  model: "microsoft/wavlm-base-plus"
+  lora_rank: 8
